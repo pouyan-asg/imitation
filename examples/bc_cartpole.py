@@ -12,6 +12,8 @@ Notes:
     -- observation space: [cart position, cart velocity, pole angle, pole angular velocity]
     -- reward: 1 for every timestep the pole is upright
     -- link: https://www.gymlibrary.dev/environments/classic_control/cart_pole/
+- expert: obviously it has 2 action space, 4 observation space, and Adam optimizer.
+    
 """
 
 import numpy as np
@@ -70,7 +72,7 @@ bc_trainer = bc.BC(
 reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
 print(f"\n Reward before training: {reward_before_training}")
 
-bc_trainer.train(n_epochs=10)
+bc_trainer.train(n_epochs=1)
 
 reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
 print(f"\n Reward after training: {reward_after_training}")

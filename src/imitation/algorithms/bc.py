@@ -228,6 +228,7 @@ class BCLogger:
         training_metrics: BCTrainingMetrics,
         rollout_stats: Mapping[str, float],
     ):
+        # all data which will be printed in the terminal. Some come from BCTrainingMetrics.
         self._logger.record("batch_size", batch_size)
         self._logger.record("bc/epoch", self._current_epoch)
         self._logger.record("bc/batch", batch_num)

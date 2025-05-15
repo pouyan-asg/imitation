@@ -157,3 +157,36 @@ class AtariInteractivePolicy(ImageObsDiscreteInteractivePolicy):
             *args,
             **kwargs,
         )
+
+
+# class CartPoleInteractivePolicy(DiscreteInteractivePolicy):
+#     """Interactive policy for CartPole using text-based rendering."""
+
+#     def _render(self, obs: np.ndarray) -> None:
+#         print("\n🧠 Observation:", obs)
+#         return None
+
+#     def _clean_up(self, context: object) -> None:
+#         # Nothing to clean
+#         pass
+
+class CartPoleInteractivePolicy(DiscreteInteractivePolicy):
+    def __init__(self, env, *args, **kwargs):
+        self.env_render_func = env.envs[0].render
+        super().__init__(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            *args,
+            **kwargs,
+        )
+
+    def _render(self, obs: np.ndarray) -> None:
+        self.env_render_func()  # Shows real-time CartPole GUI window
+        return None
+
+    def _clean_up(self, context: object) -> None:
+        pass
+
+
+
+    
