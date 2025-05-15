@@ -1,6 +1,7 @@
 """This is a simple example demonstrating how to clone the behavior of an expert.
 
-Refer to the jupyter notebooks for more detailed examples of how to use the algorithms.
+we first train an expert policy using the stable-baselines3 library (RL) and then imitate 
+its behavior using Behavioral Cloning (BC). 
 """
 import numpy as np
 from stable_baselines3 import PPO
@@ -40,6 +41,9 @@ def train_expert():
 
 def download_expert():
     print("Downloading a pretrained expert.")
+
+    """it can be downloaded from huggingface.co or not"""
+
     expert = load_policy(
         "ppo-huggingface",
         organization="HumanCompatibleAI",
@@ -52,6 +56,8 @@ def download_expert():
 def sample_expert_transitions():
     # expert = train_expert()  # uncomment to train your own expert
     expert = download_expert()
+
+    """To generate trajectories from a given policy,"""
 
     print("Sampling expert transitions.")
     rollouts = rollout.rollout(
