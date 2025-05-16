@@ -26,7 +26,7 @@ class DiscreteInteractivePolicy(base_policies.NonTrainablePolicy, abc.ABC):
         observation_space: gym.Space,
         action_space: gym.Space,
         action_keys_names: collections.OrderedDict,
-        clear_screen_on_query: bool = True,
+        clear_screen_on_query: bool = False,
     ):
         """Builds DiscreteInteractivePolicy.
 
@@ -57,6 +57,7 @@ class DiscreteInteractivePolicy(base_policies.NonTrainablePolicy, abc.ABC):
         }
         self.clear_screen_on_query = clear_screen_on_query
 
+    # hows the image, prompts the user to press a key, then maps key → action index
     def _choose_action(
         self,
         obs: Union[np.ndarray, Dict[str, np.ndarray]],
@@ -114,7 +115,7 @@ class ImageObsDiscreteInteractivePolicy(DiscreteInteractivePolicy):
         """Applies any required observation processing to get an image to show."""
         return obs
 
-
+# This maps Atari action names (from the environment) to keyboard keys
 ATARI_ACTION_NAMES_TO_KEYS = {
     "NOOP": "1",
     "FIRE": "2",
@@ -147,6 +148,8 @@ class AtariInteractivePolicy(ImageObsDiscreteInteractivePolicy):
             if isinstance(env, atari_env.AtariEnv)
             else env.env_method("get_action_meanings", indices=[0])[0]
         )
+
+        # maps the action keys to their semantic names
         action_keys_names = collections.OrderedDict(
             [(ATARI_ACTION_NAMES_TO_KEYS[name], name) for name in action_names],
         )
@@ -181,6 +184,7 @@ class CartPoleInteractivePolicy(DiscreteInteractivePolicy):
         )
 
     def _render(self, obs: np.ndarray) -> None:
+        print("\n🧠 Observation:", obs)
         self.env_render_func()  # Shows real-time CartPole GUI window
         return None
 

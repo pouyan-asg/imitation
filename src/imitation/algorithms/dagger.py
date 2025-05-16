@@ -550,7 +550,22 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
 
 
 class SimpleDAggerTrainer(DAggerTrainer):
-    """Simpler subclass of DAggerTrainer for training with synthetic feedback."""
+    """Simpler subclass of DAggerTrainer for training with synthetic feedback.
+    This is a simplified version of the DAggerTrainer class that is made specifically 
+    for cases where the expert feedback is synthetic — meaning it's generated automatically, 
+    not from a human.
+    SimpleDAggerTrainer = "easy-to-use DAgger implementation designed for when your expert 
+    is automated (e.g., a trained model), not a human giving live inputs."
+    """
+
+    """
+    🔧General Structure
+    SimpleDAggerTrainer is a subclass of DAggerTrainer and does two main things:
+    1. Initializes a DAgger trainer using a synthetic (pre-trained) expert policy.
+    2. Runs DAgger training rounds where:
+    - It collects trajectories using the expert policy (mixed with the agent own actions depending on a probability beta)
+    - It updates the agent via behavioral cloning on all collected data
+    """
 
     def __init__(
         self,
@@ -655,8 +670,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         total_timestep_count = 0
         round_num = 0
+        print("TEST 1")
 
         while total_timestep_count < total_timesteps:
+            print("TEST 2")
             collector = self.create_trajectory_collector()
             round_episode_count = 0
             round_timestep_count = 0
@@ -665,7 +682,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
                 min_episodes=rollout_round_min_episodes,
             )
+            print("TEST 3")
 
+            # Uses the expert_policy to generate (obs, act) pairs. 
+            # It may mix in the learner’s actions depending on beta.
             trajectories = rollout.generate_trajectories(
                 policy=self.expert_policy,
                 venv=collector,
@@ -673,8 +693,15 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 deterministic_policy=True,
                 rng=collector.rng,
             )
+            print("TEST 4")
+            with open("logggs.txt", "a") as f:
+                f.write(str(len(trajectories)))
+                f.write("\n")
+                f.write(str((trajectories)))
+                f.write("\n")
 
             for traj in trajectories:
+                print("TEST 5")
                 self._logger.record_mean(
                     "dagger/mean_episode_reward",
                     np.sum(traj.rews),
@@ -683,6 +710,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 total_timestep_count += len(traj)
 
             round_episode_count += len(trajectories)
+            print("TEST 6")
 
             self._logger.record("dagger/total_timesteps", total_timestep_count)
             self._logger.record("dagger/round_num", round_num)
@@ -690,5 +718,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
             # `logger.dump` is called inside BC.train within the following fn call:
+            # bc_train_kwargs can be None or a dictionary. If None, default training 
+            # settings are used. If a dictionary, those settings are passed to the BC trainer.
             self.extend_and_update(bc_train_kwargs)
             round_num += 1
+            print("TEST 7")

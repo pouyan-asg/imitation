@@ -144,6 +144,7 @@ class TrajectoryAccumulator:
             A list of completed trajectories. There should be one trajectory for
             each `True` in the `dones` argument.
         """
+        # print("TEST 3-1")
         trajs: List[types.TrajectoryWithRew] = []
         wrapped_obs = types.maybe_wrap_in_dictobs(obs)
 
@@ -157,7 +158,9 @@ class TrajectoryAccumulator:
 
         # iterate through steps
         zip_iter = enumerate(zip(acts, wrapped_obs, rews, dones, infos))
+        # print("TEST 3-2")
         for env_idx, (act, ob, rew, done, info) in zip_iter:
+            # print("TEST 3-3")
             if done:
                 # When dones[i] from VecEnv.step() is True, obs[i] is the first
                 # observation following reset() of the ith VecEnv, and
@@ -165,6 +168,8 @@ class TrajectoryAccumulator:
                 real_ob = types.maybe_wrap_in_dictobs(info["terminal_observation"])
             else:
                 real_ob = ob
+
+            # print("TEST 3-4")
 
             self.add_step(
                 dict(
@@ -177,7 +182,9 @@ class TrajectoryAccumulator:
                 ),
                 env_idx,
             )
+            # print("TEST 3-5")
             if done:
+                # print("TEST 3-6")
                 # finish env_idx-th trajectory
                 new_traj = self.finish_trajectory(env_idx, terminal=True)
                 trajs.append(new_traj)
@@ -186,7 +193,7 @@ class TrajectoryAccumulator:
                 self.add_step(dict(obs=ob), env_idx)
         return trajs
 
-
+# it takes a sequence of trajectories with rewards and returns a boolean
 GenTrajTerminationFn = Callable[[Sequence[types.TrajectoryWithRew]], bool]
 
 
@@ -214,10 +221,10 @@ def make_min_timesteps(n: int) -> GenTrajTerminationFn:
     Returns:
         A function implementing this termination condition.
     """
-    assert n >= 1
+    assert n >= 1  # Checks that n is at least 1
 
     def f(trajectories: Sequence[types.TrajectoryWithRew]):
-        timesteps = sum(len(t.obs) - 1 for t in trajectories)
+        timesteps = sum(len(t.obs) - 1 for t in trajectories)  # since the number of actions/rewards per trajectory is one less than the number of observations
         return timesteps >= n
 
     return f
@@ -410,6 +417,7 @@ def generate_trajectories(
         should truncate if required.
     """
     get_actions = policy_to_callable(policy, venv, deterministic_policy)
+    print("TEST 2-1")
 
     # Collect rollout tuples.
     trajectories = []
@@ -421,6 +429,7 @@ def generate_trajectories(
         (np.ndarray, dict),
     ), "Tuple observations are not supported."
     wrapped_obs = types.maybe_wrap_in_dictobs(obs)
+    print("TEST 2-2")
 
     # we use dictobs to iterate over the envs in a vecenv
     for env_idx, ob in enumerate(wrapped_obs):
@@ -430,6 +439,7 @@ def generate_trajectories(
         # "previous obs" (this matters for, e.g., Atari, where observations are
         # really big).
         trajectories_accum.add_step(dict(obs=ob), env_idx)
+        print("TEST 2-3")
 
     # Now, we sample until `sample_until(trajectories)` is true.
     # If we just stopped then this would introduce a bias towards shorter episodes,
@@ -441,7 +451,9 @@ def generate_trajectories(
     active = np.ones(venv.num_envs, dtype=bool)
     state = None
     dones = np.zeros(venv.num_envs, dtype=bool)
+    print("TEST 2-4")
     while np.any(active):
+        print("TEST 2-5")
         # policy gets unwrapped observations (eg as dict, not dictobs)
         acts, state = get_actions(obs, state, dones)
         obs, rews, dones, infos = venv.step(acts)
@@ -455,6 +467,11 @@ def generate_trajectories(
         # environment after `sample_until(trajectories)` was true, then we do
         # *not* want to add any subsequent trajectories from it. We avoid this
         # by just making it never done.
+
+        # The operation dones &= active sets each element of dones to True only 
+        # if it was already True and the corresponding element in active is also True. 
+        # If active[i] is False, then dones[i] will be set to False regardless of its previous value.
+        # This ensures that only active environments can be marked as done.
         dones &= active
 
         new_trajs = trajectories_accum.add_steps_and_auto_finish(
@@ -465,11 +482,19 @@ def generate_trajectories(
             infos,
         )
         trajectories.extend(new_trajs)
+        print(len(trajectories)) # it added 1 number of trajectories
+        print("TEST 2-6")
+        # print(sample_until(trajectories))
 
         if sample_until(trajectories):
+            print("iffffffff")
             # Termination condition has been reached. Mark as inactive any
             # environments where a trajectory was completed this timestep.
             active &= ~dones
+        print("TEST 2-66")  # it stucks in this while loop because done is always False
+        print(active)
+        print(dones)
+        # print(trajectories)
 
     # Note that we just drop partial trajectories. This is not ideal for some
     # algos; e.g. BC can probably benefit from partial trajectories, too.
@@ -479,9 +504,11 @@ def generate_trajectories(
     # when callees end up truncating the number of trajectories or transitions.
     # It is also cheap, since we're just shuffling pointers.
     rng.shuffle(trajectories)  # type: ignore[arg-type]
+    print("TEST 2-7")
 
     # Sanity checks.
     for trajectory in trajectories:
+        print("TEST 2-8")
         n_steps = len(trajectory.acts)
         # extra 1 for the end
         if isinstance(venv.observation_space, spaces.Dict):

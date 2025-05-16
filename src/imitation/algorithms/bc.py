@@ -279,7 +279,7 @@ class BC(algo_base.DemonstrationAlgorithm):
         action_space: gym.Space,
         rng: np.random.Generator,
         policy: Optional[policies.ActorCriticPolicy] = None,
-        demonstrations: Optional[algo_base.AnyTransitions] = None,
+        demonstrations: Optional[algo_base.AnyTransitions] = None,  # A value of type algo_base.AnyTransitions (i.e., some form of transition dataset), or None
         batch_size: int = 32,
         minibatch_size: Optional[int] = None,
         optimizer_cls: Type[th.optim.Optimizer] = th.optim.Adam,
