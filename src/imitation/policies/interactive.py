@@ -12,6 +12,7 @@ from stable_baselines3.common import vec_env
 
 import imitation.policies.base as base_policies
 from imitation.util import util
+from imitation.policies.base import NonTrainablePolicy
 
 
 class DiscreteInteractivePolicy(base_policies.NonTrainablePolicy, abc.ABC):
@@ -162,35 +163,66 @@ class AtariInteractivePolicy(ImageObsDiscreteInteractivePolicy):
         )
 
 
-# class CartPoleInteractivePolicy(DiscreteInteractivePolicy):
-#     """Interactive policy for CartPole using text-based rendering."""
+class CartPoleInteractivePolicy(NonTrainablePolicy):
+    """Interactive policy for CartPole using keyboard input and live rendering.
+    this class depends on NonTrainablePolicy class which is an abstract class. 
+    NonTrainablePolicy Inherits from BasePolicy (used by all SB3 policies).
+    _choose_action shoudl be defined in this child class.
+    """
 
-#     def _render(self, obs: np.ndarray) -> None:
-#         print("\n🧠 Observation:", obs)
-#         return None
-
-#     def _clean_up(self, context: object) -> None:
-#         # Nothing to clean
-#         pass
-
-class CartPoleInteractivePolicy(DiscreteInteractivePolicy):
     def __init__(self, env, *args, **kwargs):
-        self.env_render_func = env.envs[0].render
+        assert isinstance(env, vec_env.VecEnv)
+        self.env_render_func = env.envs[0].render  # real-time rendering
+        observation_space = env.observation_space
+        action_space = env.action_space
+        # Define two actions: LEFT = 0, RIGHT = 1
+        self.key_to_action = {'a': 0, 'd': 1}
+        super().__init__(observation_space, action_space)
+
+    def _choose_action(self, obs):
+        self.env_render_func()  # render environment
+
+        print("\n🧠 Observation:", obs)
+        print("Choose action - Left (a), Right (d):")
+        key = input("Your action: ").strip().lower()
+
+        while key not in self.key_to_action:
+            key = input("Invalid key! Choose again (a/d): ").strip().lower()
+
+        return np.array([self.key_to_action[key]])
+
+
+
+class CartPoleDiscreteInteractivePolicy(DiscreteInteractivePolicy):
+    """Interactive keyboard policy for CartPole using DiscreteInteractivePolicy base."""
+
+    def __init__(self, env: vec_env.VecEnv, *args, **kwargs):
+        assert isinstance(env, vec_env.VecEnv)
+
+        # Map keyboard keys to semantic action names (just for display)
+        # CartPole has 2 actions: 0 (LEFT), 1 (RIGHT)
+        action_keys_names = collections.OrderedDict([
+            ("a", "LEFT"),
+            ("d", "RIGHT"),
+        ])
+
+        self.env_render_func = env.envs[0].render  # Access real-time GUI rendering
+
         super().__init__(
             observation_space=env.observation_space,
             action_space=env.action_space,
+            action_keys_names=action_keys_names,
             *args,
             **kwargs,
         )
 
     def _render(self, obs: np.ndarray) -> None:
         print("\n🧠 Observation:", obs)
-        self.env_render_func()  # Shows real-time CartPole GUI window
+        self.env_render_func()  # This shows the GUI window (if render_mode="human")
         return None
 
     def _clean_up(self, context: object) -> None:
-        pass
-
+        pass  # No need to close anything
 
 
     

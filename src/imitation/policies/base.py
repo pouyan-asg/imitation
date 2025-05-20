@@ -15,7 +15,10 @@ from imitation.util import networks
 
 
 class NonTrainablePolicy(policies.BasePolicy, abc.ABC):
-    """Abstract class for non-trainable (e.g. hard-coded or interactive) policies."""
+    """Abstract class for non-trainable (e.g. hard-coded or interactive) policies.
+    Inherits from BasePolicy (used by all SB3 policies).
+    
+    """
 
     def __init__(self, observation_space: gym.Space, action_space: gym.Space):
         """Builds NonTrainablePolicy with specified observation and action space."""
@@ -29,17 +32,23 @@ class NonTrainablePolicy(policies.BasePolicy, abc.ABC):
         obs: Union[th.Tensor, Dict[str, th.Tensor]],
         deterministic: bool = False,
     ):
+        """this internal function will use the _choose_action function to get the action.
+        Also, it will be used by predict() in the base class."""
         np_actions = []
+        # Supports both plain obs and dictionary obs (DictObs).
+        # Converts PyTorch tensors to NumPy arrays.
         if isinstance(obs, dict):
             np_obs: Union[types.DictObs, np.ndarray] = types.DictObs(
                 {k: v.detach().cpu().numpy() for k, v in obs.items()},
             )
         else:
             np_obs = obs.detach().cpu().numpy()
+
         for np_ob in np_obs:
             np_ob_unwrapped = types.maybe_unwrap_dictobs(np_ob)
             assert self.observation_space.contains(np_ob_unwrapped)
             np_actions.append(self._choose_action(np_ob_unwrapped))
+        # Converts the collected NumPy actions to a PyTorch tensor to match SB3's expectations.
         np_actions = np.stack(np_actions, axis=0)
         th_actions = th.as_tensor(np_actions, device=self.device)
         return th_actions
@@ -49,7 +58,10 @@ class NonTrainablePolicy(policies.BasePolicy, abc.ABC):
         self,
         obs: Union[np.ndarray, Dict[str, np.ndarray]],
     ) -> np.ndarray:
-        """Chooses an action, optionally based on observation obs."""
+        """Chooses an action, optionally based on observation obs.
+        _choose_action is declared, but not implemented in the base class.
+        _choose_action shoudl be defined in the child class
+        """
 
     def forward(self, *args):
         # technically BasePolicy is a Torch module, so this needs a forward()
