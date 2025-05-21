@@ -43,7 +43,7 @@ bc_trainer = bc.BC(
 
 #     dagger_trainer.train(2000)
 
-my_dir = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/"
+my_dir = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs"
 dagger_trainer = SimpleDAggerTrainer(
     venv=env,
     scratch_dir=my_dir,
@@ -53,6 +53,7 @@ dagger_trainer = SimpleDAggerTrainer(
 )
 
 dagger_trainer.train(2000)
+print(dagger_trainer)
 
 reward_after_training, _ = evaluate_policy(dagger_trainer.policy, env, 20)
 print(f"\nReward after training: {reward_after_training}")

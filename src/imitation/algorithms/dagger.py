@@ -670,10 +670,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         total_timestep_count = 0
         round_num = 0
-        print("TEST 1")
+        # print("TEST 1")
 
         while total_timestep_count < total_timesteps:
-            print("TEST 2")
+            # print("TEST 2")
             collector = self.create_trajectory_collector()
             round_episode_count = 0
             round_timestep_count = 0
@@ -682,7 +682,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
                 min_episodes=rollout_round_min_episodes,
             )
-            print("TEST 3")
+            # print("TEST 3")
 
             # Uses the expert_policy to generate (obs, act) pairs. 
             # It may mix in the learner’s actions depending on beta.
@@ -693,15 +693,15 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 deterministic_policy=True,
                 rng=collector.rng,
             )
-            print("TEST 4")
-            with open("logggs.txt", "a") as f:
+            # print("TEST 4")
+            with open("logs/logs.txt", "a") as f:
                 f.write(str(len(trajectories)))
                 f.write("\n")
                 f.write(str((trajectories)))
                 f.write("\n")
 
             for traj in trajectories:
-                print("TEST 5")
+                # print("TEST 5")
                 self._logger.record_mean(
                     "dagger/mean_episode_reward",
                     np.sum(traj.rews),
@@ -710,7 +710,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 total_timestep_count += len(traj)
 
             round_episode_count += len(trajectories)
-            print("TEST 6")
+            # print("TEST 6")
 
             self._logger.record("dagger/total_timesteps", total_timestep_count)
             self._logger.record("dagger/round_num", round_num)
@@ -722,4 +722,4 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # settings are used. If a dictionary, those settings are passed to the BC trainer.
             self.extend_and_update(bc_train_kwargs)
             round_num += 1
-            print("TEST 7")
+            # print("TEST 7")

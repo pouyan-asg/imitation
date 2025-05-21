@@ -78,7 +78,6 @@ bc_trainer = bc.BC(
     rng=rn_seed,
 )
 
-
 evaluation_env = make_vec_env(
     "seals:seals/CartPole-v0",
     rng=rng,
