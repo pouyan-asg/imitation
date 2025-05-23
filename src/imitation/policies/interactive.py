@@ -167,12 +167,34 @@ class CartPoleInteractivePolicy(NonTrainablePolicy):
     """Interactive policy for CartPole using keyboard input and live rendering.
     this class depends on NonTrainablePolicy class which is an abstract class. 
     NonTrainablePolicy Inherits from BasePolicy (used by all SB3 policies).
-    _choose_action shoudl be defined in this child class.
+    _choose_action should be defined in this child class.
+
+    CartPoleInteractivePolicy
+    └── inherits from NonTrainablePolicy
+            └── inherits from BasePolicy
+                    └── inherits from BaseModel (nn.Module)
+
+    - How this class works and what is the objectove?
+        -- objective: creating a set of (observation , action) which observation comes from gym
+        environment and action comes from human expert.
+        -- architecture: observation from gym environment and human actions send to NonTrainablePolicy class.
+        Actually, actions send through _choose_action to NonTrainablePolicy. In NonTrainablePolicy class,
+        _predict depends on _choose_action and it finally sends tensor actions to BasePolicy class.
+        BasePolicy.predict() depends on _predict function which returns (state, action) pairs.
+        
+        policy.predict(obs)
+            ⟶ BasePolicy.predict()
+                ⟶ NonTrainablePolicy._predict()
+                     ⟶ YourPolicy._choose_action(obs) ← Keyboard interaction
+                    
     """
 
     def __init__(self, env, *args, **kwargs):
+        """It does not learn, does not predict, and has no weights — 
+        its purely a wrapper that lets a human act as the policy."""
+
         assert isinstance(env, vec_env.VecEnv)
-        self.env_render_func = env.envs[0].render  # real-time rendering
+        # self.env_render_func = env.envs[0].render  # real-time rendering
         observation_space = env.observation_space
         action_space = env.action_space
         # Define two actions: LEFT = 0, RIGHT = 1
@@ -180,7 +202,11 @@ class CartPoleInteractivePolicy(NonTrainablePolicy):
         super().__init__(observation_space, action_space)
 
     def _choose_action(self, obs):
-        self.env_render_func()  # render environment
+        # self.env_render_func()  # render environment
+        """
+        It waits for keyboard input ('a' for left, 'd' for right) 
+        and outputs discrete actions (0 or 1) based on user choice.
+        """
 
         print("\n🧠 Observation:", obs)
         print("Choose action - Left (a), Right (d):")

@@ -33,7 +33,13 @@ class NonTrainablePolicy(policies.BasePolicy, abc.ABC):
         deterministic: bool = False,
     ):
         """this internal function will use the _choose_action function to get the action.
-        Also, it will be used by predict() in the base class."""
+        Also, it will be used by predict() in the base class.
+        
+        1. Converts PyTorch tensors to NumPy
+        2. Loops through observations
+        3. Calls _choose_action() for each
+        4. Converts results back to a PyTorch tensor (SB3-compatible)
+        """
         np_actions = []
         # Supports both plain obs and dictionary obs (DictObs).
         # Converts PyTorch tensors to NumPy arrays.
@@ -48,8 +54,9 @@ class NonTrainablePolicy(policies.BasePolicy, abc.ABC):
             np_ob_unwrapped = types.maybe_unwrap_dictobs(np_ob)
             assert self.observation_space.contains(np_ob_unwrapped)
             np_actions.append(self._choose_action(np_ob_unwrapped))
+            
         # Converts the collected NumPy actions to a PyTorch tensor to match SB3's expectations.
-        np_actions = np.stack(np_actions, axis=0)
+        np_actions = np.stack(np_actions, axis=0)  # Combine all individual actions into a single batch array.
         th_actions = th.as_tensor(np_actions, device=self.device)
         return th_actions
 
@@ -60,12 +67,11 @@ class NonTrainablePolicy(policies.BasePolicy, abc.ABC):
     ) -> np.ndarray:
         """Chooses an action, optionally based on observation obs.
         _choose_action is declared, but not implemented in the base class.
-        _choose_action shoudl be defined in the child class
+        _choose_action should be defined in the child class
         """
 
     def forward(self, *args):
-        # technically BasePolicy is a Torch module, so this needs a forward()
-        # method
+        # technically BasePolicy is a Torch module, so this needs a forward() method
         raise NotImplementedError  # pragma: no cover
 
 
