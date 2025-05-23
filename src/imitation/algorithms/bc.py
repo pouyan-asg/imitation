@@ -32,11 +32,33 @@ from imitation.util import logger as imit_logger
 from imitation.util import util
 
 
+"""
+@dataclass is a decorator which is part of the Python dataclasses module. 
+When the @dataclass decorator is used, it automatically generates special methods such as: 
+    _ _ init _ _.: Constructor to initialize fields
+    _ _ repr _ _ : String representation of the object
+    _ _ eq _ _  : Equality comparison between objects
+    _ _ hash_ _ : Enables use as dictionary keys (if values are hashable)
+
+frozen=True: This makes your dataclass immutable — meaning once it's created, 
+    its fields cannot be changed.
+
+Some definations:
+    - Minibatch:	A small subset of data used to calculate gradients once (.backward())
+    - Batch: A group of minibatches that make up a full optimization step (.step())
+    - Epoch: One full pass through the entire dataset
+"""
+
 @dataclasses.dataclass(frozen=True)
 class BatchIteratorWithEpochEndCallback:
     """Loops through batches from a batch loader and calls a callback after every epoch.
 
     Will throw an exception when an epoch contains no batches.
+
+    This class gives you an iterator with:
+        - Epoch control OR batch control
+        - Epoch-end callback support
+        - Safety against empty datasets
     """
 
     batch_loader: Iterable[types.TransitionMapping]
@@ -45,6 +67,7 @@ class BatchIteratorWithEpochEndCallback:
     on_epoch_end: Optional[Callable[[int], None]]
 
     def __post_init__(self) -> None:
+        # check if both OR none of them are provided (You must specify exactly one).
         epochs_and_batches_specified = (
             self.n_epochs is not None and self.n_batches is not None
         )
@@ -56,6 +79,7 @@ class BatchIteratorWithEpochEndCallback:
                 "Must provide exactly one of `n_epochs` and `n_batches` arguments.",
             )
 
+    # This lets you use this object in a loop.
     def __iter__(self) -> Iterator[types.TransitionMapping]:
         def batch_iterator() -> Iterator[types.TransitionMapping]:
             # Note: the islice here ensures we do not exceed self.n_epochs
@@ -79,7 +103,13 @@ class BatchIteratorWithEpochEndCallback:
 
 @dataclasses.dataclass(frozen=True)
 class BCTrainingMetrics:
-    """Container for the different components of behavior cloning loss."""
+    """Container for the different components of behavior cloning loss.
+
+    Returning a class like BCTrainingMetrics is:
+        🔍 Easier to read and debug
+        🛠️ Easier to maintain and extend
+        📦 Cleaner to integrate with logging and tools
+    """
 
     neglogp: th.Tensor
     entropy: Optional[th.Tensor]
@@ -92,10 +122,16 @@ class BCTrainingMetrics:
 
 @dataclasses.dataclass(frozen=True)
 class BehaviorCloningLossCalculator:
-    """Functor to compute the loss used in Behavior Cloning."""
+    """Functor to compute the loss used in Behavior Cloning.
+    
+    This class is a loss engine that computes:
+        - Negative log-likelihood loss (supervised loss)
+        - Optional entropy bonus (exploration)
+        - L2 regularization (smooth weights)
+    """
 
-    ent_weight: float
-    l2_weight: float
+    ent_weight: float  # Weight for entropy regularization (encourages exploration).
+    l2_weight: float  # Weight for L2 regularization (penalizes large weights).
 
     def __call__(
         self,
@@ -119,6 +155,9 @@ class BehaviorCloningLossCalculator:
             A BCTrainingMetrics object with the loss and all the components it
             consists of.
         """
+
+        # Unwraps dictionary obs and safely converts everything 
+        # to PyTorch tensors on the correct device.
         tensor_obs = types.map_maybe_dict(
             util.safe_to_tensor,
             types.maybe_unwrap_dictobs(obs),
@@ -127,23 +166,30 @@ class BehaviorCloningLossCalculator:
 
         # policy.evaluate_actions's type signatures are incorrect.
         # See https://github.com/DLR-RM/stable-baselines3/issues/1679
-        (_, log_prob, entropy) = policy.evaluate_actions(
-            tensor_obs,  # type: ignore[arg-type]
-            acts,
-        )
-        prob_true_act = th.exp(log_prob).mean()
-        log_prob = log_prob.mean()
-        entropy = entropy.mean() if entropy is not None else None
 
-        l2_norms = [th.sum(th.square(w)) for w in policy.parameters()]
+        # log_prob: Log-probabilities (log likelihood) of the expert actions under the current policy.
+        # entropy: Shannon entropy of the action distribution
+        (_, log_prob, entropy) = policy.evaluate_actions(tensor_obs, acts)
+        prob_true_act = th.exp(log_prob).mean()  # The mean probability that the current policy assigns to expert actions.
+        log_prob = log_prob.mean()  # Mean log-probability.
+        entropy = entropy.mean() if entropy is not None else None  # Average entropy over the batch.
+
+        # classic L2 penalty: 1/2sum(w^2)
+        l2_norms = [th.sum(th.square(w)) for w in policy.parameters()]  # Loop over each trainable tensor (e.g., layer weights, biases) in the policy.
         l2_norm = sum(l2_norms) / 2  # divide by 2 to cancel with gradient of square
+        # prevent overfitting by penalizing large weights.
         # sum of list defaults to float(0) if len == 0.
         assert isinstance(l2_norm, th.Tensor)
 
+        # Entropy encourages stochasticity or exploration.
+        # Higher entropy (less confident decisions) can prevent early overfitting in cloning.
         ent_loss = -self.ent_weight * (entropy if entropy is not None else th.zeros(1))
-        neglogp = -log_prob
+        neglogp = -log_prob  # This is the core BC loss.
         l2_loss = self.l2_weight * l2_norm
-        loss = neglogp + ent_loss + l2_loss
+        total_loss = neglogp + ent_loss + l2_loss
+
+        # If you set ent_weight=0 and l2_weight=0, this reduces to plain 
+        # supervised learning (i.e., cross-entropy loss).
 
         return BCTrainingMetrics(
             neglogp=neglogp,
@@ -152,7 +198,7 @@ class BehaviorCloningLossCalculator:
             prob_true_act=prob_true_act,
             l2_norm=l2_norm,
             l2_loss=l2_loss,
-            loss=loss,
+            loss=total_loss,
         )
 
 
@@ -202,7 +248,11 @@ class RolloutStatsComputer:
 
 
 class BCLogger:
-    """Utility class to help logging information relevant to Behavior Cloning."""
+    """Utility class to help logging information relevant to Behavior Cloning.
+    This class depends on HierarchicalLogger (imitation/util/logger.py) and BCTrainingMetrics.
+
+    during training, BCTrainingMetrics will be construct (see BehaviorCloningLossCalculator class).
+    """
 
     def __init__(self, logger: imit_logger.HierarchicalLogger):
         """Create new BC logger.
@@ -270,6 +320,32 @@ class BC(algo_base.DemonstrationAlgorithm):
     """Behavioral cloning (BC).
 
     Recovers a policy via supervised learning from observation-action pairs.
+
+    variables:
+    - ent_weight = 1e-3
+        -- This adds entropy regularization to the loss:
+            --- To encourage exploration or prevent overconfident policies.
+            --- A small weight like 1e-3 softly nudges the policy toward being 
+                slightly more stochastic, rather than always picking the most confident action.
+            --- Without this, the policy might collapse to a narrow set of actions 
+                and perform worse in varied situations.
+        -- why small: 
+            --- A high entropy weight might make the policy too random, 
+            especially in a supervised setting like BC where the goal is to mimic the expert.
+
+    - l2_weight = 0.0
+        -- This controls L2 regularization, which penalizes large weights.
+            --- L2 regularization helps prevent overfitting to the expert dataset 
+                by keeping the model weights small.
+            --- Setting it to 0.0 turns off this regularization. This is okay if:
+                ---- The dataset is large or clean,
+                ---- Overfitting isn't a concern,
+                ---- You want to keep the policy fully expressive.
+        -- note: 
+            --- If you observe overfitting (e.g., high training performance but poor 
+            generalization), you can increase l2_weight to combat that (e.g. 1e-4).
+                ---- when? Training loss drops, but Validation or rollout performance stalls 
+                    or worsens. High variance in actions during rollouts despite low training loss.
     """
 
     def __init__(
@@ -297,6 +373,9 @@ class BC(algo_base.DemonstrationAlgorithm):
             rng: the random state to use for the random number generator.
             policy: a Stable Baselines3 policy; if unspecified,
                 defaults to `FeedForward32Policy`.
+                    - FeedForward32Policy: A small, fully connected neural network with 
+                        two hidden layers of 32 units. It's used as the default architecture 
+                        for BC tasks in simple environments like CartPole. 
             demonstrations: Demonstrations from an expert (optional). Transitions
                 expressed directly as a `types.TransitionsMinimal` object, a sequence
                 of trajectories, or an iterable of transition batches (mappings from
@@ -315,7 +394,7 @@ class BC(algo_base.DemonstrationAlgorithm):
                 weight decay, for optimiser construction.
             ent_weight: scaling applied to the policy's entropy regularization.
             l2_weight: scaling applied to the policy's L2 regularization.
-            device: name/identity of device to place policy on.
+            device: name/identity of device to place policy on (CPU or GPU).
             custom_logger: Where to log to; if None (default), creates a new logger.
 
         Raises:
@@ -328,6 +407,9 @@ class BC(algo_base.DemonstrationAlgorithm):
         self.minibatch_size = minibatch_size or batch_size
         if self.batch_size % self.minibatch_size != 0:  # pragma: no cover
             raise ValueError("Batch size must be a multiple of minibatch size.")
+        #  Ensures the minibatch_size cleanly divides batch_size.
+        
+        # Inits parent class and creates a logger wrapper for structured training logs.
         super().__init__(
             demonstrations=demonstrations,
             custom_logger=custom_logger,
@@ -336,10 +418,15 @@ class BC(algo_base.DemonstrationAlgorithm):
 
         self.action_space = action_space
         self.observation_space = observation_space
-
         self.rng = rng
 
+        # If no policy is provided, it creates a 
+        # basic feedforward policy (a neural network) with a default feature extractor.
         if policy is None:
+            # If the observation_space is a Dict (i.e., multiple keys/inputs like 
+            # {"image": ..., "state": ...}), use CombinedExtractor, which processes 
+            # multiple modalities.Otherwise, use FlattenExtractor, which just flattens 
+            # vector observations (like in CartPole).
             extractor = (
                 torch_layers.CombinedExtractor
                 if isinstance(observation_space, gym.spaces.Dict)
@@ -348,32 +435,43 @@ class BC(algo_base.DemonstrationAlgorithm):
             policy = policy_base.FeedForward32Policy(
                 observation_space=observation_space,
                 action_space=action_space,
-                # Set lr_schedule to max value to force error if policy.optimizer
-                # is used by mistake (should use self.optimizer instead).
+                # Set lr_schedule to to the maximum possible float value to force error 
+                # if policy.optimizer is used by mistake (should use self.optimizer instead).
+                # It ensures the user uses the external optimizer, not the default one in SB3.
                 lr_schedule=lambda _: th.finfo(th.float32).max,
                 features_extractor_class=extractor,
             )
         self._policy = policy.to(utils.get_device(device))
         # TODO(adam): make policy mandatory and delete observation/action space params?
+
+        # These assertions help catch configuration bugs early before training begins
+        # check observation/action defined inside the policy is the same as BC ones.
+        # Note: self.policy is the same as self._policy (see down @property)
         assert self.policy.observation_space == self.observation_space
         assert self.policy.action_space == self.action_space
 
         if optimizer_kwargs:
             if "weight_decay" in optimizer_kwargs:  # pragma: no cover
                 raise ValueError("Use the parameter l2_weight instead of weight_decay.")
+
         optimizer_kwargs = optimizer_kwargs or {}
         self.optimizer = optimizer_cls(
             self.policy.parameters(),
             **optimizer_kwargs,
         )
 
+        # compute training loss
         self.loss_calculator = BehaviorCloningLossCalculator(ent_weight, l2_weight)
 
+    # This @property turns self.policy into a read-only attribute that simply 
+    # returns self._policy. So anytime you access self.policy, Python calls that 
+    # @property method and returns the actual object stored in self._policy.
     @property
     def policy(self) -> policies.ActorCriticPolicy:
         return self._policy
 
     def set_demonstrations(self, demonstrations: algo_base.AnyTransitions) -> None:
+        """ Converts demonstration data into batches using a utility function."""
         self._demo_data_loader = algo_base.make_data_loader(
             demonstrations,
             self.minibatch_size,
@@ -425,12 +523,12 @@ class BC(algo_base.DemonstrationAlgorithm):
             self._bc_logger.reset_tensorboard_steps()
         self._bc_logger.log_epoch(0)
 
-        compute_rollout_stats = RolloutStatsComputer(
-            log_rollouts_venv,
-            log_rollouts_n_episodes,
-        )
+        #  this will compute rollout metrics like mean reward after every batch.
+        compute_rollout_stats = RolloutStatsComputer(log_rollouts_venv, log_rollouts_n_episodes)
 
         def _on_epoch_end(epoch_number: int):
+            """This internal function updates logs and optionally 
+            calls a user-defined callback."""
             if tqdm_progress_bar is not None:
                 total_num_epochs_str = f"of {n_epochs}" if n_epochs is not None else ""
                 tqdm_progress_bar.display(
@@ -441,7 +539,12 @@ class BC(algo_base.DemonstrationAlgorithm):
             if on_epoch_end is not None:
                 on_epoch_end()
 
+        # This calculates how many minibatches are in one batch.
+        # after each minibach a gradient backward() update and 
+        # adter each batch, a full optimizing step()
         mini_per_batch = self.batch_size // self.minibatch_size
+        # This computes the total number of minibatches to train.
+        # n_batches is a mutiplayer for number of batch_size
         n_minibatches = n_batches * mini_per_batch if n_batches is not None else None
 
         assert self._demo_data_loader is not None
@@ -463,10 +566,20 @@ class BC(algo_base.DemonstrationAlgorithm):
             tqdm_progress_bar = batches_with_stats
 
         def process_batch():
+            """This runs one optimizer step (i.e., weight update) and 
+            logs results if it's time to do so.
+            steps: 
+                - Apply weight update (.step())
+                - Clear gradients (.zero_grad())
+                - Optionally log performance
+                - Run custom post-batch logic
+            """
+
             self.optimizer.step()
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad()  # Resets all gradients to zero.
 
             if batch_num % log_interval == 0:
+                # Evaluates the current policy by running rollouts in the environment
                 rollout_stats = compute_rollout_stats(self.policy, self.rng)
 
                 self._bc_logger.log_batch(
@@ -480,19 +593,23 @@ class BC(algo_base.DemonstrationAlgorithm):
             if on_batch_end is not None:
                 on_batch_end()
 
+
         self.optimizer.zero_grad()
         for (
             batch_num,
             minibatch_size,
             num_samples_so_far,
         ), batch in batches_with_stats:
+            # Just a type hint that the next variable, obs_tensor, will be either 
+            # a PyTorch tensor or a dictionary of tensors (e.g., in multi-input environments).
             obs_tensor: Union[th.Tensor, Dict[str, th.Tensor]]
-            # unwraps the observation if it's a dictobs and converts arrays to tensors
+            # unwraps the observation if it's a dict obs and converts arrays to tensors
             obs_tensor = types.map_maybe_dict(
                 lambda x: util.safe_to_tensor(x, device=self.policy.device),
                 types.maybe_unwrap_dictobs(batch["obs"]),
             )
             acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
+
             training_metrics = self.loss_calculator(self.policy, obs_tensor, acts)
 
             # Renormalise the loss to be averaged over the whole

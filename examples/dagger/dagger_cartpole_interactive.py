@@ -43,8 +43,8 @@ that policies and training pipelines (like DAgger and BC) can operate on
 batched inputs and outputs, even when using only one environment. it makes it easy to 
 scale up to parallel training later — without changing your core code.
 
-- gym.wrappers.TimeLimit(..., max_episode_steps=20): This wraps the environment to force 
-    episodes to terminate after 20 steps, even if the pole hasnt fallen. It's helpful for 
+- gym.wrappers.TimeLimit(..., max_episode_steps=XX): This wraps the environment to force 
+    episodes to terminate after XX steps, even if the pole hasnt fallen. It's helpful for 
     controlling training speed and episode length.
     - lambda: This is an anonymous function (closure) that returns a fresh environment 
         instance when called.
@@ -80,7 +80,7 @@ dagger_trainer = SimpleDAggerTrainer(
     rng=rng,
 )
 
-# -------Training loop----------
+# -------Training loop (code stops here until training will be finished)----------
 dagger_trainer.train(
     total_timesteps=100,
     rollout_round_min_episodes=1,

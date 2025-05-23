@@ -167,7 +167,8 @@ class CartPoleInteractivePolicy(NonTrainablePolicy):
     """Interactive policy for CartPole using keyboard input and live rendering.
     this class depends on NonTrainablePolicy class which is an abstract class. 
     NonTrainablePolicy Inherits from BasePolicy (used by all SB3 policies).
-    _choose_action should be defined in this child class.
+    
+    note: _choose_action should be defined in this child class.
 
     CartPoleInteractivePolicy
     └── inherits from NonTrainablePolicy
