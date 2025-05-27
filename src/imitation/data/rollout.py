@@ -417,7 +417,6 @@ def generate_trajectories(
         should truncate if required.
     """
     get_actions = policy_to_callable(policy, venv, deterministic_policy)
-    # print("TEST 2-1")
 
     # Collect rollout tuples.
     trajectories = []
@@ -429,7 +428,6 @@ def generate_trajectories(
         (np.ndarray, dict),
     ), "Tuple observations are not supported."
     wrapped_obs = types.maybe_wrap_in_dictobs(obs)
-    # print("TEST 2-2")
 
     # we use dictobs to iterate over the envs in a vecenv
     for env_idx, ob in enumerate(wrapped_obs):
@@ -439,7 +437,6 @@ def generate_trajectories(
         # "previous obs" (this matters for, e.g., Atari, where observations are
         # really big).
         trajectories_accum.add_step(dict(obs=ob), env_idx)
-        # print("TEST 2-3")
 
     # Now, we sample until `sample_until(trajectories)` is true.
     # If we just stopped then this would introduce a bias towards shorter episodes,
@@ -451,9 +448,8 @@ def generate_trajectories(
     active = np.ones(venv.num_envs, dtype=bool)
     state = None
     dones = np.zeros(venv.num_envs, dtype=bool)
-    # print("TEST 2-4")
+
     while np.any(active):
-        # print("TEST 2-5")
         # policy gets unwrapped observations (eg as dict, not dictobs)
         acts, state = get_actions(obs, state, dones)
         obs, rews, dones, infos = venv.step(acts)
@@ -482,19 +478,11 @@ def generate_trajectories(
             infos,
         )
         trajectories.extend(new_trajs)
-        # print(len(trajectories)) # it added 1 number of trajectories
-        # print("TEST 2-6")
-        # print(sample_until(trajectories))
 
         if sample_until(trajectories):
-            # print("iffffffff")
             # Termination condition has been reached. Mark as inactive any
             # environments where a trajectory was completed this timestep.
             active &= ~dones
-        # print("TEST 2-66")  # it stucks in this while loop because done is always False
-        # print(active)
-        # print(dones)
-        # print(trajectories)
 
     # Note that we just drop partial trajectories. This is not ideal for some
     # algos; e.g. BC can probably benefit from partial trajectories, too.
@@ -504,11 +492,9 @@ def generate_trajectories(
     # when callees end up truncating the number of trajectories or transitions.
     # It is also cheap, since we're just shuffling pointers.
     rng.shuffle(trajectories)  # type: ignore[arg-type]
-    # print("TEST 2-7")
 
     # Sanity checks.
     for trajectory in trajectories:
-        # print("TEST 2-8")
         n_steps = len(trajectory.acts)
         # extra 1 for the end
         if isinstance(venv.observation_space, spaces.Dict):

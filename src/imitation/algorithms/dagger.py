@@ -32,6 +32,18 @@ class BetaSchedule(abc.ABC):
     In DAgger, β (beta) is the probability of using the expert action instead of the 
     learned policy action during data collection (rollouts). As training progresses, 
     you usually want to decrease beta, so the agent gradually relies more on its own policy.
+
+    - why Beta formula here differs from paper? 
+        The original DAgger paper defines an optional "probabilistic mixing" strategy for beta
+        (DAgger with β-mixing), where at round i, the action taken at each state is chosen as:
+        π_i = β_i * π* + (1 - β_i) * π̂_i
+        The paper proposes either:
+            1. Always β = 1 (purely expert), or
+            2. A decaying β (e.g., β_i = β^i for exponential decay, or something similar).
+        They emphasize that in theoretical guarantees, using β_i = 0 (i.e., only π̂_i) 
+        is enough — so the decaying β is just a practical method to stabilize early training.
+        This is not from the original paper, but is a practical variant often used to smooth 
+        the transition from expert to learned policy.
     """
 
     @abc.abstractmethod
@@ -376,11 +388,11 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         super().__init__(custom_logger=custom_logger)
 
         if beta_schedule is None:
-            beta_schedule = LinearBetaSchedule(15)
+            beta_schedule = LinearBetaSchedule(15)  # A fixed number of rounds
         self.beta_schedule = beta_schedule
         self.scratch_dir = util.parse_path(scratch_dir)
         self.venv = venv
-        self.round_num = 0
+        self.round_num = 0  # i in the original paper
         self._last_loaded_round = -1
         self._all_demos = []  # stores all expert demos across rounds.
         self.rng = rng
@@ -551,6 +563,12 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
     def create_trajectory_collector(self) -> InteractiveTrajectoryCollector:
         """Create trajectory collector to extend current round's demonstration set.
 
+        get_robot_acts: Given an input acts, return the first output of 
+        self.bc_trainer.policy.predict(acts). predict function has two output 
+        'action, _states = policy.predict(obs)', so we need only the first one.
+        Thus, Whenever the trajectory collector asks for a robot action based on 
+        an observation (called acts here), return the action chosen by the current policy
+
         Returns:
             A collector configured with the appropriate beta, imitator policy, etc.
             for the current round. Refer to the documentation for
@@ -654,7 +672,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             rng=rng,
             **dagger_trainer_kwargs,
         )
-        self.expert_policy = expert_policy
+        self.expert_policy = expert_policy  # initial expert policy
         if expert_policy.observation_space != self.venv.observation_space:
             raise ValueError(
                 "Mismatched observation space between expert_policy and venv",
@@ -721,10 +739,36 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         total_timestep_count = 0
         round_num = 0
-        # print("TEST 1")
 
         while total_timestep_count < total_timesteps:
-            # print("TEST 2")
+            """
+            collector is type of the vectorized environment but with more parameters like Beta.
+            collector will be used in rollout.generate_trajectories as the enviornment.
+
+            create_trajectory_collector() is a simple function to use InteractiveTrajectoryCollector class.
+            some parametrs such as venv, beta, get_robot_acts, etc send to the main class.
+            note that get_robot_acts is a function which connects to BC predict (i.e. bc_trainer.policy.predict).
+            Also, beta is created in a linear form reagrding a fixed horizon (e.g. LinearBetaSchedule(15))
+
+            InteractiveTrajectoryCollector class has some internal functions which will be run.
+            when we want to create trajectory samples, we use rollout.generate_trajectories with
+            expert policy and collector which is a more complete version of the environment.
+            in 'rollout.generate_trajectories' we have venv.step() and venv.reset(). the .step()
+            function connects to same one in 'base_vec_env.py'. Note that 'InteractiveTrajectoryCollector' class 
+            inhrites from VecEnvWrapper class which is a child of abstract class 'VecEnv'.
+            so, step() is a function of 'VecEnv' class. in this original function, two other functions
+            run including step_async() and step_wait(). However, since this class is an abstract version,
+            both latter functions will be run through child class which is 'InteractiveTrajectoryCollector'.
+
+            if you check step_async() and step_wait() functions inside 'InteractiveTrajectoryCollector' class,
+            they are both connected to DummyVecEnv class in dummy_vec_env.py. 'DummyVecEnv' class 
+            is a child of 'VecEnv' as well.
+
+            we see how all these functions are connected in an abstract format.
+
+            Conclusion: when generate_trajectories() runs, it recevies various parametrs from the environment
+            to give us (state, action) pairs. in the internal steps, beta and expert policies are considered too.
+            """
             collector = self.create_trajectory_collector()
             round_episode_count = 0
             round_timestep_count = 0
@@ -733,7 +777,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
                 min_episodes=rollout_round_min_episodes,
             )
-            # print("TEST 3")
 
             # Uses the expert_policy to generate (obs, act) pairs. 
             # It may mix in the learner’s actions depending on beta.
@@ -744,7 +787,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 deterministic_policy=True,
                 rng=collector.rng,
             )
-            # print("TEST 4")
+
             with open("logs/logs.txt", "w") as f:
                 f.write(str(len(trajectories)))
                 f.write("\n")
@@ -752,7 +795,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 f.write("\n")
 
             for traj in trajectories:
-                # print("TEST 5")
+
                 self._logger.record_mean(
                     "dagger/mean_episode_reward",
                     np.sum(traj.rews),
@@ -761,7 +804,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 total_timestep_count += len(traj)
 
             round_episode_count += len(trajectories)
-            # print("TEST 6")
 
             self._logger.record("dagger/total_timesteps", total_timestep_count)
             self._logger.record("dagger/round_num", round_num)
@@ -773,4 +815,3 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # settings are used. If a dictionary, those settings are passed to the BC trainer.
             self.extend_and_update(bc_train_kwargs)
             round_num += 1
-            # print("TEST 7")

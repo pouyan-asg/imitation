@@ -44,7 +44,7 @@ batched inputs and outputs, even when using only one environment. it makes it ea
 scale up to parallel training later — without changing your core code.
 
 - gym.wrappers.TimeLimit(..., max_episode_steps=XX): This wraps the environment to force 
-    episodes to terminate after XX steps, even if the pole hasnt fallen. It's helpful for 
+    episodes to terminate after XX steps, even if the pole has not fallen. It is helpful for 
     controlling training speed and episode length.
     - lambda: This is an anonymous function (closure) that returns a fresh environment 
         instance when called.
