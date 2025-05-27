@@ -8,6 +8,7 @@ policy.
 
 import abc
 import logging
+logging.basicConfig(level=logging.INFO)  # it shows all logs on the terminal
 import os
 import pathlib
 import uuid
@@ -26,15 +27,19 @@ from imitation.util import util
 
 
 class BetaSchedule(abc.ABC):
-    """Computes beta (% of time demonstration action used) from training round."""
+    """Computes beta (% of time demonstration action used) from training round.
+    
+    In DAgger, β (beta) is the probability of using the expert action instead of the 
+    learned policy action during data collection (rollouts). As training progresses, 
+    you usually want to decrease beta, so the agent gradually relies more on its own policy.
+    """
 
     @abc.abstractmethod
     def __call__(self, round_num: int) -> float:
         """Computes the value of beta for the current round.
 
         Args:
-            round_num: the current round number. Rounds are assumed to be sequentially
-                numbered from 0.
+            round_num: the current round of training (starting from 0).
 
         Returns:
             The fraction of the time to sample a demonstrator action. Robot
@@ -49,7 +54,8 @@ class LinearBetaSchedule(BetaSchedule):
         """Builds LinearBetaSchedule.
 
         Args:
-            rampdown_rounds: number of rounds over which to anneal beta.
+            rampdown_rounds: number of rounds over which to anneal beta. it controls 
+                            how many rounds it takes for beta to decrease from 1 to 0.
         """
         self.rampdown_rounds = rampdown_rounds
 
@@ -61,7 +67,7 @@ class LinearBetaSchedule(BetaSchedule):
 
         Returns:
             beta linearly decreasing from `1` to `0` between round `0` and
-            `self.rampdown_rounds`. After that, it is 0.
+            `self.rampdown_rounds`. After that, it is always 0.
         """
         assert round_num >= 0
         return min(1, max(0, (self.rampdown_rounds - round_num) / self.rampdown_rounds))
@@ -320,11 +326,12 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
                round-XYZ/
                    …
     """
-
+    # holds all the expert demonstrations gathered.
     _all_demos: List[types.Trajectory]
 
+    # The default number of BC training epochs in `extend_and_update`.
     DEFAULT_N_EPOCHS: int = 4
-    """The default number of BC training epochs in `extend_and_update`."""
+    
 
     def __init__(
         self,
@@ -346,8 +353,25 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
             beta_schedule: Provides a value of `beta` (the probability of taking
                 expert action in any given state) at each round of training. If
                 `None`, then `linear_beta_schedule` will be used instead.
+                it is a maximum limits for beta to decrease to 0 (by default is 15).
             bc_trainer: A `BC` instance used to train the underlying policy.
             custom_logger: Where to log to; if None (default), creates a new logger.
+
+        Notes:
+            -round:
+                -- think of a round as one full cycle of: 
+                    collecting new data → aggregating it → training.
+            - demo:
+                -- One expert-generated episode of (obs, act) pairs (i.e., one trajectory)
+
+        demos/
+        ├── round-000/
+        │   ├── dagger-demo-XXXX.npz
+        │   ├── dagger-demo-XXXX.npz
+        ├── round-001/
+        │   ├── dagger-demo-XXXX.npz
+        │   └── dagger-demo-XXXX.npz
+        
         """
         super().__init__(custom_logger=custom_logger)
 
@@ -358,9 +382,10 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         self.venv = venv
         self.round_num = 0
         self._last_loaded_round = -1
-        self._all_demos = []
+        self._all_demos = []  # stores all expert demos across rounds.
         self.rng = rng
 
+        # Ensures the observation/action spaces of the BC policy match the environment.
         utils.check_for_correct_spaces(
             self.venv,
             bc_trainer.observation_space,
@@ -396,6 +421,13 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         return self.bc_trainer.batch_size
 
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
+        """
+        This private method loads all demonstration data from saved files 
+        on disk (in .npz format), starting from the last loaded round up to the current round.
+        It returns:
+            - a single flattened list of transitions for training.
+            - a list of number of demos per round (for logging/metrics/debugging).
+        """
         num_demos_by_round = []
         for round_num in range(self._last_loaded_round + 1, self.round_num + 1):
             round_dir = self._demo_dir_path_for_round(round_num)
@@ -412,18 +444,33 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         # https://stackoverflow.com/questions/31534583/is-os-listdir-deterministic
         # To ensure the order is consistent across file systems,
         # we sort by the filename.
+        """Returns all .npz files from a demo round directory, 
+        sorted alphabetically for consistency."""
         filenames = sorted(os.listdir(round_dir))
         return [round_dir / f for f in filenames if f.endswith(".npz")]
 
     def _demo_dir_path_for_round(self, round_num: Optional[int] = None) -> pathlib.Path:
+        """it creats a demo folder with the round folder(s) inside it (round-000, round-001, etc)"""
         if round_num is None:
             round_num = self.round_num
         return self.scratch_dir / "demos" / f"round-{round_num:03d}"
 
     def _try_load_demos(self) -> None:
-        """Load the dataset for this round into self.bc_trainer as a DataLoader."""
+        """Load the dataset for this round and sends them to the self.bc_trainer as a DataLoader.
+        
+        1. Looks for .npz demo files from the current round.
+        2. Loads them and all previous demos into memory.
+        3. Converts them into a PyTorch DataLoader.
+        4. Passes the DataLoader to the BC trainer for use during training.
+        5. Keeps track of what is already been loaded.
+        """
+
         demo_dir = self._demo_dir_path_for_round()
+        # If the directory exists, it finds all .npz files inside 
+        # (which are saved expert demos). If not, it returns an empty list.
         demo_paths = self._get_demo_paths(demo_dir) if demo_dir.is_dir() else []
+
+        # If no demonstrations are found for the current round, raise an exception.
         if len(demo_paths) == 0:
             raise NeedsDemosException(
                 f"No demos found for round {self.round_num} in dir '{demo_dir}'. "
@@ -436,12 +483,16 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
             logging.info(
                 f"Loaded {sum(num_demos)} new demos from {len(num_demos)} rounds",
             )
+            # If the total number of transitions (i.e., (obs, act) pairs) 
+            # is less than the training batch size, training would fail.
             if len(transitions) < self.batch_size:
                 raise ValueError(
                     "Not enough transitions to form a single batch: "
                     f"self.batch_size={self.batch_size} > "
                     f"len(transitions)={len(transitions)}",
                 )
+            
+            #  PyTorch DataLoader
             data_loader = th_data.DataLoader(
                 transitions,
                 self.batch_size,
@@ -449,6 +500,7 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
                 shuffle=True,
                 collate_fn=types.transitions_collate_fn,
             )
+            # Passes the DataLoader to the BC trainer for use during training.
             self.bc_trainer.set_demonstrations(data_loader)
             self._last_loaded_round = self.round_num
 
@@ -556,15 +608,14 @@ class SimpleDAggerTrainer(DAggerTrainer):
     not from a human.
     SimpleDAggerTrainer = "easy-to-use DAgger implementation designed for when your expert 
     is automated (e.g., a trained model), not a human giving live inputs."
-    """
-
-    """
+    
     🔧General Structure
     SimpleDAggerTrainer is a subclass of DAggerTrainer and does two main things:
-    1. Initializes a DAgger trainer using a synthetic (pre-trained) expert policy.
-    2. Runs DAgger training rounds where:
-    - It collects trajectories using the expert policy (mixed with the agent own actions depending on a probability beta)
-    - It updates the agent via behavioral cloning on all collected data
+        1. Initializes a DAgger trainer using a synthetic (pre-trained) expert policy.
+        2. Runs DAgger training rounds where:
+            - It collects trajectories using the expert policy 
+            (mixed with the agent own actions depending on a probability beta)
+            - It updates the agent via behavioral cloning on all collected data
     """
 
     def __init__(
@@ -694,7 +745,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 rng=collector.rng,
             )
             # print("TEST 4")
-            with open("logs/logs.txt", "a") as f:
+            with open("logs/logs.txt", "w") as f:
                 f.write(str(len(trajectories)))
                 f.write("\n")
                 f.write(str((trajectories)))

@@ -176,7 +176,7 @@ class CartPoleInteractivePolicy(NonTrainablePolicy):
                     └── inherits from BaseModel (nn.Module)
 
     - How this class works and what is the objectove?
-        -- objective: creating a set of (observation , action) which observation comes from gym
+        -- objective: creating a set of (state , action) which observation comes from gym
         environment and action comes from human expert.
         -- architecture: observation from gym environment and human actions send to NonTrainablePolicy class.
         Actually, actions send through _choose_action to NonTrainablePolicy. In NonTrainablePolicy class,

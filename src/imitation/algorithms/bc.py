@@ -523,7 +523,7 @@ class BC(algo_base.DemonstrationAlgorithm):
             self._bc_logger.reset_tensorboard_steps()
         self._bc_logger.log_epoch(0)
 
-        #  this will compute rollout metrics like mean reward after every batch.
+        # this will compute rollout metrics like mean reward after every batch.
         compute_rollout_stats = RolloutStatsComputer(log_rollouts_venv, log_rollouts_n_episodes)
 
         def _on_epoch_end(epoch_number: int):
