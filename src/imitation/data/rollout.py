@@ -144,7 +144,6 @@ class TrajectoryAccumulator:
             A list of completed trajectories. There should be one trajectory for
             each `True` in the `dones` argument.
         """
-        # print("TEST 3-1")
         trajs: List[types.TrajectoryWithRew] = []
         wrapped_obs = types.maybe_wrap_in_dictobs(obs)
 
@@ -158,9 +157,7 @@ class TrajectoryAccumulator:
 
         # iterate through steps
         zip_iter = enumerate(zip(acts, wrapped_obs, rews, dones, infos))
-        # print("TEST 3-2")
         for env_idx, (act, ob, rew, done, info) in zip_iter:
-            # print("TEST 3-3")
             if done:
                 # When dones[i] from VecEnv.step() is True, obs[i] is the first
                 # observation following reset() of the ith VecEnv, and
@@ -168,8 +165,6 @@ class TrajectoryAccumulator:
                 real_ob = types.maybe_wrap_in_dictobs(info["terminal_observation"])
             else:
                 real_ob = ob
-
-            # print("TEST 3-4")
 
             self.add_step(
                 dict(
@@ -182,9 +177,8 @@ class TrajectoryAccumulator:
                 ),
                 env_idx,
             )
-            # print("TEST 3-5")
+
             if done:
-                # print("TEST 3-6")
                 # finish env_idx-th trajectory
                 new_traj = self.finish_trajectory(env_idx, terminal=True)
                 trajs.append(new_traj)
