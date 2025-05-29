@@ -15,19 +15,23 @@ from datasets import Dataset
 from imitation.policies.serialize import load_policy, save_stable_model
 from pathlib import Path
 from imitation.util import util
+import wandb
+from imitation.util import logger as imit_logger
 
 
 """
-- max_episode_steps: total number of steps in one episode which means total number that 
-    expert gives an action.
+- max_episode_steps: maximum number of steps in one episode which means total number that 
+    expert gives an action. it is like a hard limit on the number of steps in an episode. 
+    However, the number of steps in an episode can be less than this limit.
+        --  Why it matters: Prevents endless episodes and ensures the agent 
+            gets diverse starting conditions.
+- total_timesteps: total number of all episodes that the agent will train. 
+    Training will loop until it has seen at least 'total_timesteps in each environment (not policy steps, env steps).
 - rollout_round_min_episodes: This is part of the DAgger training loop. 
     In each round, DAgger will collect at least 'rollout_round_min_episodes' full 
-    episode from the expert (with some agent interaction too).
+    episode (from expert + some learner actions).
 - rollout_round_min_timesteps: Each DAgger round must collect at least 
     'rollout_round_min_timesteps' steps total, no matter how many episodes it takes.
-- total_timesteps: total number of all episodes that the agent will train. 
-    Training will loop until it has seen at least 'total_timesteps total environment 
-    steps (not policy steps, env steps).
 - n_eval_episodes: This controls how many test episodes are run after training 
     is done. Each episode normally contains 'max_episode_steps' steps.
 
@@ -56,10 +60,21 @@ root_path = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs"
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
 logs_dir = os.path.join(root_path, f"{timestamp}")
 
+run = wandb.init(
+    project="DAgger pouyan",           # your project name
+    entity="pouyan-asg",         # your WandB username or team name
+    name="cartpole-dagger-run",    # optional: name of this specific run
+)
+
+logger = imit_logger.configure(
+    folder=logs_dir,
+    format_strs=["stdout", "log", "csv", "wandb"],
+)
+
 # -------Create a vectorized environment----------
 env = vec_env.DummyVecEnv([
     lambda: gym.wrappers.TimeLimit(gym.make("CartPole-v1", render_mode="human"), 
-                                   max_episode_steps=20)
+                                   max_episode_steps=10)
                                             ])
 env.seed(0)
 
@@ -78,13 +93,16 @@ dagger_trainer = SimpleDAggerTrainer(
     expert_policy=expert,
     bc_trainer=bc_trainer,
     rng=rng,
+    custom_logger=logger,
+    # wandb_run=run,  # Pass the WandB run object to the trainer
 )
 
 # -------Training loop (code stops here until training will be finished)----------
 dagger_trainer.train(
-    total_timesteps=100,
-    rollout_round_min_episodes=1,
-    rollout_round_min_timesteps=1,
+    total_timesteps=50,
+    rollout_round_min_episodes=5,
+    rollout_round_min_timesteps=5,
+    wandb_log=run,  # Pass the WandB run object to the trainer
 )
 
 # -------Reward evaluation----------

@@ -24,6 +24,7 @@ from imitation.algorithms import base, bc
 from imitation.data import rollout, serialize, types
 from imitation.util import logger as imit_logger
 from imitation.util import util
+import wandb
 
 
 class BetaSchedule(abc.ABC):
@@ -430,7 +431,7 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         super().__init__(custom_logger=custom_logger)
 
         if beta_schedule is None:
-            beta_schedule = LinearBetaSchedule(15)  # A fixed number of rounds
+            beta_schedule = LinearBetaSchedule(1)  # A fixed number of rounds
         self.beta_schedule = beta_schedule
         self.scratch_dir = util.parse_path(scratch_dir)
         self.venv = venv
@@ -748,6 +749,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         rollout_round_min_episodes: int = 3,
         rollout_round_min_timesteps: int = 500,
         bc_train_kwargs: Optional[dict] = None,
+        wandb_log: Optional[wandb.sdk.wandb_run.Run] = None,
     ) -> None:
         """Train the DAgger agent.
 
@@ -771,8 +773,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 rounded up to finish the minimum number of episodes or timesteps in the
                 last DAgger training round, and the environment timesteps are executed
                 in multiples of `self.venv.num_envs`.
-            rollout_round_min_episodes: The number of episodes the must be completed
-                completed before a dataset aggregation step ends.
+            rollout_round_min_episodes: The number of episodes that must be completed
+                before a dataset aggregation step ends.
             rollout_round_min_timesteps: The number of environment timesteps that must
                 be completed before a dataset aggregation step ends. Also, that any
                 round will always train for at least `self.batch_size` timesteps,
@@ -863,6 +865,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_num", round_num)
             self._logger.record("dagger/round_episode_count", round_episode_count)
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
+
+            wandb_log.log({"timestep": total_timestep_count}, step=round_num)
 
             # `logger.dump` is called inside BC.train within the following fn call:
             # bc_train_kwargs can be None or a dictionary. If None, default training 

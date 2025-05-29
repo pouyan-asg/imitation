@@ -620,6 +620,9 @@ class BC(algo_base.DemonstrationAlgorithm):
             loss.backward()
 
             batch_num = batch_num * self.minibatch_size // self.batch_size
+
+            # run.log({"loss": loss}, step=round_num)
+
             if num_samples_so_far % self.batch_size == 0:
                 process_batch()
         if num_samples_so_far % self.batch_size != 0:
