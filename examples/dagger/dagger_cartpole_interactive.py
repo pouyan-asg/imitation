@@ -94,6 +94,7 @@ reward_after_training, _ = evaluate_policy(model=dagger_trainer.policy,
 print(f"\nReward after training: {reward_after_training}")
 
 # -------Saving trained policy----------
+print("\nSaving the trained policy...")
 dagger_trainer.save_trainer()
 
 

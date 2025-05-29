@@ -268,17 +268,39 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
                 Otherwise, a "robot" (typically a BC policy) action will be sampled
                 and executed instead via `self.get_robot_act`.
         """
+        """"
+        Where are the expert actions and learner states recorded?
+        They are recorded inside InteractiveTrajectoryCollector via the 
+        TrajectoryAccumulator, using self._last_user_actions and self._last_obs,
+        regardless of whether the environment actually executed those actions.
+        """
+
         assert self._is_reset, "call .reset() before .step()"
         assert self._last_obs is not None
 
         # Replace each given action with a robot action 100*(1-beta)% of the time.
         actual_acts = np.array(actions)
 
+        # This line creates a boolean mask that decides, for each environment, 
+        # whether to use the robot’s action instead of the expert's. The result 
+        # is a boolean mask of shape (num_envs,) indicating which environments 
+        # will use the robot policy's action.
         mask = self.rng.uniform(0, 1, size=(self.num_envs,)) > self.beta
+        print("Learner used in envs:", mask)
+        # Even though there's no for loop, vectorized NumPy operations like 
+        # array[mask] = ... behave just like looping over the True values in 
+        # mask — they're just faster and cleaner.
         if np.sum(mask) != 0:
             actual_acts[mask] = self.get_robot_acts(self._last_obs[mask])
+        
+        """
+        while π_i = β_i * π* + (1 - β_i) * π̂_i is not explicity shown but when we select
+        an action with Beta probablity, it is exactly using either expert or learner policies.
+        Generally self.bc_trainer.policy is π^i— the current learner. in order to understand better,
+        look at 'get_robot_acts' function. 
+        """
 
-        self._last_user_actions = actions
+        self._last_user_actions = actions  # Expert actions saved for later, regardless of execution
         self.venv.step_async(actual_acts)
 
     def step_wait(self) -> VecEnvStepReturn:
@@ -294,6 +316,8 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
         assert self.traj_accum is not None
         assert self._last_user_actions is not None
         self._last_obs = next_obs
+
+        # This is where recording into the dataset happens
         fresh_demos = self.traj_accum.add_steps_and_auto_finish(
             obs=next_obs,
             acts=self._last_user_actions,
@@ -301,6 +325,22 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
             infos=infos,
             dones=dones,
         )
+        print("fresh_demos:", len(fresh_demos), "demos collected in this step")
+
+        """
+        The TrajectoryAccumulator is not saving a list of (obs, act) pairs in one shot. 
+        It accumulates one step at a time, and internally stores actions as acting on the 
+        previous state.
+        The add_steps_and_auto_finish() call is designed to finalize the step that was just 
+        executed — meaning it pairs the previous observation obs_t (stored from before) 
+        with acts_t, and only uses next_obs to begin the next step.
+        Even though you see obs=next_obs, this obs is the next step's start state. 
+        The action is saved alongside the previous state, which was stored earlier.
+        This is a rolling mechanism where the accumulator:
+            - finalizes the previous step with stored obs & action
+            - starts a new step with next_obs
+        """
+
         for traj_index, traj in enumerate(fresh_demos):
             _save_dagger_demo(traj, traj_index, self.save_dir, self.rng)
 
@@ -578,6 +618,7 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         """
         save_dir = self._demo_dir_path_for_round()
         beta = self.beta_schedule(self.round_num)
+        print("beta for this round:", beta)
         collector = InteractiveTrajectoryCollector(
             venv=self.venv,
             get_robot_acts=lambda acts: self.bc_trainer.policy.predict(acts)[0],
@@ -681,6 +722,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             )
         if expert_policy.action_space != self.venv.action_space:
             raise ValueError("Mismatched action space between expert_policy and venv")
+        
+        print("expert trajs:", expert_trajs)
 
         # TODO(shwang):
         #   Might welcome Transitions and DataLoaders as sources of expert data
@@ -743,6 +786,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         round_num = 0
 
         while total_timestep_count < total_timesteps:
+            print(f"Starting round {round_num} with total_timestep_count={total_timestep_count}")
 
             collector = self.create_trajectory_collector()
 
@@ -788,7 +832,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             """process of creating a new dataset of visited states by sampled policy and actions given 
             by expert + saving them is done inside 'rollout.generate_trajectories' which 
             has a back and forth communication with 'InteractiveTrajectoryCollector' class. 
-            the rest of code, we dont work with trajectories since we already saved it.
+            In the rest of code, we dont work with trajectories since we already saved it.
             """
             trajectories = rollout.generate_trajectories(
                 policy=self.expert_policy,

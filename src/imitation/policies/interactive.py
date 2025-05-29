@@ -187,6 +187,10 @@ class CartPoleInteractivePolicy(NonTrainablePolicy):
             ⟶ BasePolicy.predict()
                 ⟶ NonTrainablePolicy._predict()
                      ⟶ YourPolicy._choose_action(obs) ← Keyboard interaction
+
+
+    Cartpole observation space is a 4-dimensional vector: cart position, cart velocity, pole angle, and pole angular velocity.
+    Cartpole action space is discrete with two actions: 0 (move left) and 1 (move right).
                     
     """
 
@@ -198,6 +202,8 @@ class CartPoleInteractivePolicy(NonTrainablePolicy):
         # self.env_render_func = env.envs[0].render  # real-time rendering
         observation_space = env.observation_space
         action_space = env.action_space
+        print('observation_space:', observation_space)
+        print('action_space:', action_space)
         # Define two actions: LEFT = 0, RIGHT = 1
         self.key_to_action = {'a': 0, 'd': 1}
         super().__init__(observation_space, action_space)

@@ -143,6 +143,15 @@ class TrajectoryAccumulator:
         Returns:
             A list of completed trajectories. There should be one trajectory for
             each `True` in the `dones` argument.
+            (obs_0, act_0, rew_0)
+            (obs_1, act_1, rew_1)
+            ...
+            (obs_T, act_T, rew_T)
+
+        what it does?
+        - Finalizes the previous step
+        - Adds the new observation obs_{t+1} to start the next step
+        - Keeps the trajectory growing correctly
         """
         trajs: List[types.TrajectoryWithRew] = []
         wrapped_obs = types.maybe_wrap_in_dictobs(obs)
