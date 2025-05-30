@@ -163,7 +163,7 @@ class AtariInteractivePolicy(ImageObsDiscreteInteractivePolicy):
         )
 
 
-class CartPoleInteractivePolicy(NonTrainablePolicy):
+class CartPoleInteractiveExpert(NonTrainablePolicy):
     """Interactive policy for CartPole using keyboard input and live rendering.
     this class depends on NonTrainablePolicy class which is an abstract class. 
     NonTrainablePolicy Inherits from BasePolicy (used by all SB3 policies).

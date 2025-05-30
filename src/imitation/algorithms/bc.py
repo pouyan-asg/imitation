@@ -23,6 +23,7 @@ import gymnasium as gym
 import numpy as np
 import torch as th
 import tqdm
+import wandb
 from stable_baselines3.common import policies, torch_layers, utils, vec_env
 
 from imitation.algorithms import base as algo_base
@@ -254,7 +255,7 @@ class BCLogger:
     during training, BCTrainingMetrics will be construct (see BehaviorCloningLossCalculator class).
     """
 
-    def __init__(self, logger: imit_logger.HierarchicalLogger):
+    def __init__(self, logger: imit_logger.HierarchicalLogger, wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,):
         """Create new BC logger.
 
         Args:
@@ -263,6 +264,8 @@ class BCLogger:
         self._logger = logger
         self._tensorboard_step = 0
         self._current_epoch = 0
+        self.wandb_run = wandb_run
+        self._wand_step = 0
 
     def reset_tensorboard_steps(self):
         self._tensorboard_step = 0
@@ -291,6 +294,42 @@ class BCLogger:
                 self._logger.record("rollout/" + k, v)
         self._logger.dump(self._tensorboard_step)
         self._tensorboard_step += 1
+
+    def log_wandb(
+        self,
+        batch_num: int,
+        batch_size: int,
+        num_samples_so_far: int,
+        training_metrics: BCTrainingMetrics,
+        rollout_stats: Mapping[str, float],
+    ):
+        if hasattr(self, "wandb_run") and self.wandb_run is not None:
+            log_dict = {
+                "epoch": self._current_epoch,
+                "batch": batch_num,
+                "batch_size": batch_size,
+                "samples_so_far": num_samples_so_far,
+            }
+
+            for k, v in training_metrics.__dict__.items():
+                if v is not None:
+                    log_dict[f"training/{k}"] = float(v)
+
+            for k, v in rollout_stats.items():
+                if "return" in k and "monitor" not in k:
+                    log_dict[f"rollout/{k}"] = v
+
+            self.wandb_run.log(log_dict, step=self._tensorboard_step)
+        self._tensorboard_step += 1
+    
+    
+    def general_wandb_log(self, log_dict: Dict[str, Any]):
+        """Logs a general dictionary to wandb."""
+
+        if hasattr(self, "wandb_run") and self.wandb_run is not None:
+            self.wandb_run.log(log_dict, step=self._wand_step)
+        self._wand_step += 1
+
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -364,6 +403,7 @@ class BC(algo_base.DemonstrationAlgorithm):
         l2_weight: float = 0.0,
         device: Union[str, th.device] = "auto",
         custom_logger: Optional[imit_logger.HierarchicalLogger] = None,
+        wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
     ):
         """Builds BC.
 
@@ -414,11 +454,12 @@ class BC(algo_base.DemonstrationAlgorithm):
             demonstrations=demonstrations,
             custom_logger=custom_logger,
         )
-        self._bc_logger = BCLogger(self.logger)
-
+        
         self.action_space = action_space
         self.observation_space = observation_space
         self.rng = rng
+        self.wandb_run = wandb_run
+        self._bc_logger = BCLogger(self.logger, self.wandb_run)
 
         # If no policy is provided, it creates a 
         # basic feedforward policy (a neural network) with a default feature extractor.
@@ -589,6 +630,13 @@ class BC(algo_base.DemonstrationAlgorithm):
                     training_metrics,
                     rollout_stats,
                 )
+            
+                self._bc_logger.log_wandb(
+                    batch_num,
+                    minibatch_size,
+                    num_samples_so_far,
+                    training_metrics,
+                    compute_rollout_stats(self.policy, self.rng),)
 
             if on_batch_end is not None:
                 on_batch_end()

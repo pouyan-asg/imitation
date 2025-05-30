@@ -1,22 +1,17 @@
 import os
-import tempfile
-import collections
 import numpy as np
 import gymnasium as gym
+import wandb
 from stable_baselines3.common import vec_env
 from imitation.algorithms import bc
-from imitation.algorithms.dagger import SimpleDAggerTrainer
-from imitation.policies.base import NonTrainablePolicy
+import imitation.algorithms.dagger as dagger
 from imitation.util import util
 from stable_baselines3.common.evaluation import evaluate_policy
 from imitation.policies import interactive
 from datetime import datetime
-from datasets import Dataset
-from imitation.policies.serialize import load_policy, save_stable_model
-from pathlib import Path
-from imitation.util import util
-import wandb
-from imitation.util import logger as imit_logger
+import imitation.util.logger as imit_logger
+from imitation.policies.serialize import load_policy
+from imitation.data import rollout, serialize, types
 
 
 """
@@ -54,66 +49,88 @@ scale up to parallel training later — without changing your core code.
         instance when called.
 """
 
-# -------variables----------
+# -------Initialize----------
 rng = np.random.default_rng(0)
 root_path = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs"
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
 logs_dir = os.path.join(root_path, f"{timestamp}")
+rollout_round_min_episodes = 5
+rollout_round_min_timesteps = 5
 
 run = wandb.init(
-    project="DAgger pouyan",           # your project name
-    entity="pouyan-asg",         # your WandB username or team name
-    name="cartpole-dagger-run",    # optional: name of this specific run
+    project="DAgger_test1",           # your project name
+    entity="electic",         # your WandB username or team name
+    name="cartpole-dagger-interactive",    # optional: name of this specific run
 )
 
 logger = imit_logger.configure(
     folder=logs_dir,
-    format_strs=["stdout", "log", "csv", "wandb"],
-)
+    format_strs=["stdout", "csv", "wandb"],
+)  # HumanOutputFormat (aka "stdout" format string)
 
 # -------Create a vectorized environment----------
 env = vec_env.DummyVecEnv([
     lambda: gym.wrappers.TimeLimit(gym.make("CartPole-v1", render_mode="human"), 
-                                   max_episode_steps=10)
-                                            ])
+                                   max_episode_steps=10)])
 env.seed(0)
 
+# -------Create expert trajectories----------
+initial_policy = load_policy(
+    "ppo-huggingface",
+    organization="HumanCompatibleAI",
+    env_name="CartPole-v1",
+    venv=env,)
+
+sample_until = rollout.make_sample_until(
+    min_timesteps=rollout_round_min_timesteps,
+    min_episodes=rollout_round_min_episodes,)
+
+exprt_trajs = rollout.generate_trajectories(
+    policy=initial_policy,
+    venv=env,
+    sample_until=sample_until,
+    deterministic_policy=True,
+    rng=rng,
+)
+
 # -------Prepare expert and algorithm----------
-expert = interactive.CartPoleInteractivePolicy(env)
+expert = interactive.CartPoleInteractiveExpert(env)
 
 bc_trainer = bc.BC(
     observation_space=env.observation_space,
     action_space=env.action_space,
     rng=rng,
+    wandb_run=run
 )
 
-dagger_trainer = SimpleDAggerTrainer(
+dagger_trainer = dagger.InteractiveDAggerTrainer(
     venv=env,
     scratch_dir=logs_dir,
     expert_policy=expert,
     bc_trainer=bc_trainer,
     rng=rng,
-    custom_logger=logger,
-    # wandb_run=run,  # Pass the WandB run object to the trainer
+    expert_trajs=exprt_trajs,
+    wandb_run=run,
 )
 
 # -------Training loop (code stops here until training will be finished)----------
 dagger_trainer.train(
     total_timesteps=50,
-    rollout_round_min_episodes=5,
-    rollout_round_min_timesteps=5,
-    wandb_log=run,  # Pass the WandB run object to the trainer
+    rollout_round_min_episodes=rollout_round_min_episodes,
+    rollout_round_min_timesteps=rollout_round_min_timesteps,
 )
 
 # -------Reward evaluation----------
 reward_after_training, _ = evaluate_policy(model=dagger_trainer.policy, 
                                             env=env, 
                                             n_eval_episodes=10)
-print(f"\nReward after training: {reward_after_training}")
+print(f"\033[91m\nReward after training: {reward_after_training}\033[0m")
 
 # -------Saving trained policy----------
-print("\nSaving the trained policy...")
+print("\033[92m\nSaving the trained policy...\n\033[0m")
 dagger_trainer.save_trainer()
+dagger_trainer.policy.save(os.path.join(logs_dir, "final_policy.pt"))
+
 
 
 

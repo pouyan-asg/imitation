@@ -287,7 +287,7 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
         # is a boolean mask of shape (num_envs,) indicating which environments 
         # will use the robot policy's action.
         mask = self.rng.uniform(0, 1, size=(self.num_envs,)) > self.beta
-        print("Learner used in envs:", mask)
+        print(f"\033[94mLearner used in envs: {mask}\033[0m")
         # Even though there's no for loop, vectorized NumPy operations like 
         # array[mask] = ... behave just like looping over the True values in 
         # mask — they're just faster and cleaner.
@@ -326,7 +326,7 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
             infos=infos,
             dones=dones,
         )
-        print("fresh_demos:", len(fresh_demos), "demos collected in this step")
+        print(f"\033[94mfresh_demos: {len(fresh_demos)} demos collected in this step\033[0m")
 
         """
         The TrajectoryAccumulator is not saving a list of (obs, act) pairs in one shot. 
@@ -431,7 +431,7 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         super().__init__(custom_logger=custom_logger)
 
         if beta_schedule is None:
-            beta_schedule = LinearBetaSchedule(1)  # A fixed number of rounds
+            beta_schedule = LinearBetaSchedule(15)  # A fixed number of rounds
         self.beta_schedule = beta_schedule
         self.scratch_dir = util.parse_path(scratch_dir)
         self.venv = venv
@@ -619,7 +619,7 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         """
         save_dir = self._demo_dir_path_for_round()
         beta = self.beta_schedule(self.round_num)
-        print("beta for this round:", beta)
+        self.beta = beta
         collector = InteractiveTrajectoryCollector(
             venv=self.venv,
             get_robot_acts=lambda acts: self.bc_trainer.policy.predict(acts)[0],
@@ -723,8 +723,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
             )
         if expert_policy.action_space != self.venv.action_space:
             raise ValueError("Mismatched action space between expert_policy and venv")
-        
-        print("expert trajs:", expert_trajs)
 
         # TODO(shwang):
         #   Might welcome Transitions and DataLoaders as sources of expert data
@@ -733,6 +731,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         if expert_trajs is not None:
             # Save each initial expert trajectory into the "round 0" demonstration
             # data directory.
+            print("\nexpert trajs:", len(expert_trajs))
             for traj_index, traj in enumerate(expert_trajs):
                 _save_dagger_demo(
                     traj,
@@ -749,7 +748,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
         rollout_round_min_episodes: int = 3,
         rollout_round_min_timesteps: int = 500,
         bc_train_kwargs: Optional[dict] = None,
-        wandb_log: Optional[wandb.sdk.wandb_run.Run] = None,
     ) -> None:
         """Train the DAgger agent.
 
@@ -788,7 +786,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         round_num = 0
 
         while total_timestep_count < total_timesteps:
-            print(f"Starting round {round_num} with total_timestep_count={total_timestep_count}")
+            print(f"\033[94m\nStarting round {round_num} with total_timestep_count={total_timestep_count}\033[0m")
 
             collector = self.create_trajectory_collector()
 
@@ -844,6 +842,110 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 rng=collector.rng,
             )
 
+            for traj in trajectories:
+
+                self._logger.record_mean(
+                    "dagger/mean_episode_reward",
+                    np.sum(traj.rews),
+                )
+                round_timestep_count += len(traj)
+                total_timestep_count += len(traj)
+
+            round_episode_count += len(trajectories)
+
+            self._logger.record("dagger/total_timesteps", total_timestep_count)
+            self._logger.record("dagger/round_num", round_num)
+            self._logger.record("dagger/round_episode_count", round_episode_count)
+            self._logger.record("dagger/round_timestep_count", round_timestep_count)
+
+            # `logger.dump` is called inside BC.train within the following fn call:
+            # bc_train_kwargs can be None or a dictionary. If None, default training 
+            # settings are used. If a dictionary, those settings are passed to the BC trainer.
+            self.extend_and_update(bc_train_kwargs)
+            round_num += 1
+
+
+class InteractiveDAggerTrainer(DAggerTrainer):
+    """
+    a copy of SimpleDAggerTrainer but with some modifications.
+    please refer to the SimpleDAggerTrainer class for more information.
+    """
+
+    def __init__(
+        self,
+        *,
+        venv: vec_env.VecEnv,
+        scratch_dir: types.AnyPath,
+        expert_policy: policies.BasePolicy,
+        rng: np.random.Generator,
+        expert_trajs: Optional[Sequence[types.Trajectory]] = None,
+        wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
+        **dagger_trainer_kwargs,
+    ):
+        super().__init__(
+            venv=venv,
+            scratch_dir=scratch_dir,
+            rng=rng,
+            **dagger_trainer_kwargs,
+        )
+        self.expert_policy = expert_policy  # initial expert policy
+        if expert_policy.observation_space != self.venv.observation_space:
+            raise ValueError(
+                "Mismatched observation space between expert_policy and venv",
+            )
+        if expert_policy.action_space != self.venv.action_space:
+            raise ValueError("Mismatched action space between expert_policy and venv")
+        self.wandb_run = wandb_run
+
+        # TODO(shwang):
+        #   Might welcome Transitions and DataLoaders as sources of expert data
+        #   in the future too, but this will require some refactoring, so for
+        #   now we just have `expert_trajs`.
+        if expert_trajs is not None:
+            # Save each initial expert trajectory into the "round 0" demonstration
+            print("expert trajs:", len(expert_trajs))
+            for traj_index, traj in enumerate(expert_trajs):
+                _save_dagger_demo(
+                    traj,
+                    traj_index,
+                    self._demo_dir_path_for_round(),
+                    self.rng,
+                    prefix="initial_data",
+                )
+
+    def train(
+        self,
+        total_timesteps: int,
+        *,
+        rollout_round_min_episodes: int = 3,
+        rollout_round_min_timesteps: int = 500,
+        bc_train_kwargs: Optional[dict] = None,
+    ) -> None:
+
+        total_timestep_count = 0
+        round_num = 0
+
+        while total_timestep_count < total_timesteps:
+            print(f"\033[93m\nStarting round {round_num} with total_timestep_count={total_timestep_count}\033[0m")
+
+            collector = self.create_trajectory_collector()
+
+            round_episode_count = 0
+            round_timestep_count = 0
+
+            sample_until = rollout.make_sample_until(
+                min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
+                min_episodes=rollout_round_min_episodes,
+            )
+
+            trajectories = rollout.generate_trajectories(
+                policy=self.expert_policy,
+                venv=collector,
+                sample_until=sample_until,
+                deterministic_policy=True,
+                rng=collector.rng,
+            )
+
             with open("logs/logs.txt", "w") as f:
                 f.write(str(len(trajectories)))
                 f.write("\n")
@@ -866,10 +968,16 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_episode_count", round_episode_count)
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
-            wandb_log.log({"timestep": total_timestep_count}, step=round_num)
+            self.wandb_run.log(
+                {
+                    "dagger/total_timesteps": total_timestep_count,
+                    "dagger/round_episode_count": round_episode_count,
+                    "dagger/round_timestep_count": round_timestep_count,
+                    "dagger/mean_episode_reward": np.sum(traj.rews),
+                    "dagger/beta": self.beta,
+                },
+                step=round_num,
+            )
 
-            # `logger.dump` is called inside BC.train within the following fn call:
-            # bc_train_kwargs can be None or a dictionary. If None, default training 
-            # settings are used. If a dictionary, those settings are passed to the BC trainer.
             self.extend_and_update(bc_train_kwargs)
             round_num += 1
