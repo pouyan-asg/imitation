@@ -54,13 +54,17 @@ rng = np.random.default_rng(0)
 root_path = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs"
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
 logs_dir = os.path.join(root_path, f"{timestamp}")
-rollout_round_min_episodes = 5
-rollout_round_min_timesteps = 5
+
+env_max_episode_steps = 150
+train_min_episodes = 100
+train_min_timesteps = 500
+total_timesteps = 5000
+n_eval_episodes = 100
 
 run = wandb.init(
     project="DAgger_test1",           # your project name
     entity="electic",         # your WandB username or team name
-    name="cartpole-dagger-interactive",    # optional: name of this specific run
+    name="cartpole-dagger-[150,100,500,5000]",    # optional: name of this specific run
 )
 
 logger = imit_logger.configure(
@@ -71,7 +75,7 @@ logger = imit_logger.configure(
 # -------Create a vectorized environment----------
 env = vec_env.DummyVecEnv([
     lambda: gym.wrappers.TimeLimit(gym.make("CartPole-v1", render_mode="human"), 
-                                   max_episode_steps=10)])
+                                   max_episode_steps=env_max_episode_steps)])
 env.seed(0)
 
 # -------Create expert trajectories----------
@@ -82,8 +86,8 @@ initial_policy = load_policy(
     venv=env,)
 
 sample_until = rollout.make_sample_until(
-    min_timesteps=rollout_round_min_timesteps,
-    min_episodes=rollout_round_min_episodes,)
+    min_timesteps=train_min_timesteps,
+    min_episodes=train_min_episodes,)
 
 exprt_trajs = rollout.generate_trajectories(
     policy=initial_policy,
@@ -115,15 +119,15 @@ dagger_trainer = dagger.InteractiveDAggerTrainer(
 
 # -------Training loop (code stops here until training will be finished)----------
 dagger_trainer.train(
-    total_timesteps=50,
-    rollout_round_min_episodes=rollout_round_min_episodes,
-    rollout_round_min_timesteps=rollout_round_min_timesteps,
+    total_timesteps=total_timesteps,
+    rollout_round_min_episodes=train_min_episodes,
+    rollout_round_min_timesteps=train_min_timesteps,
 )
 
 # -------Reward evaluation----------
 reward_after_training, _ = evaluate_policy(model=dagger_trainer.policy, 
                                             env=env, 
-                                            n_eval_episodes=10)
+                                            n_eval_episodes=n_eval_episodes)
 print(f"\033[91m\nReward after training: {reward_after_training}\033[0m")
 
 # -------Saving trained policy----------

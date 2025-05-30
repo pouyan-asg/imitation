@@ -319,16 +319,16 @@ class BCLogger:
                 if "return" in k and "monitor" not in k:
                     log_dict[f"rollout/{k}"] = v
 
-            self.wandb_run.log(log_dict, step=self._tensorboard_step)
-        self._tensorboard_step += 1
-    
-    
-    def general_wandb_log(self, log_dict: Dict[str, Any]):
-        """Logs a general dictionary to wandb."""
-
-        if hasattr(self, "wandb_run") and self.wandb_run is not None:
             self.wandb_run.log(log_dict, step=self._wand_step)
         self._wand_step += 1
+    
+
+    # def general_wandb_log(self, log_dict: Dict[str, Any]):
+    #     """Logs a general dictionary to wandb."""
+
+    #     if hasattr(self, "wandb_run") and self.wandb_run is not None:
+    #         self.wandb_run.log(log_dict, step=self._wand_step)
+    #     self._wand_step += 1
 
 
     def __getstate__(self):

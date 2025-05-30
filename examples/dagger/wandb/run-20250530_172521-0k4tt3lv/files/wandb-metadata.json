@@ -1,0 +1,24 @@
+{
+    "os": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+    "python": "3.9.22",
+    "heartbeatAt": "2025-05-30T21:25:22.788740",
+    "startedAt": "2025-05-30T21:25:21.250450",
+    "docker": null,
+    "gpu": "NVIDIA GeForce GTX 1650 Ti",
+    "gpu_count": 1,
+    "cpu_count": 16,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/dagger_cartpole_interactive.py",
+    "codePath": "examples/dagger/dagger_cartpole_interactive.py",
+    "git": {
+        "remote": "git@github.com:pouyan-asg/imitation.git",
+        "commit": "c58f7b9d450a5e47a1aa345a22b625bfaa4fa3a2"
+    },
+    "email": "pouyan.asgharian@yahoo.com",
+    "root": "/home/pouyan/phd/imitation_learning/imitation",
+    "host": "pouyan-XPS-15-9500",
+    "username": "pouyan",
+    "executable": "/home/pouyan/anaconda3/envs/iil/bin/python"
+}
