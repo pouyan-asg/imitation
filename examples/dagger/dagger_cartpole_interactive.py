@@ -55,16 +55,16 @@ root_path = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs"
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
 logs_dir = os.path.join(root_path, f"{timestamp}")
 
-env_max_episode_steps = 150
-train_min_episodes = 100
-train_min_timesteps = 500
+env_max_episode_steps = 100
+train_min_episodes = 10
+train_min_timesteps = 50
 total_timesteps = 5000
-n_eval_episodes = 100
+n_eval_episodes = 50
 
 run = wandb.init(
-    project="DAgger_test1",           # your project name
+    project="CartPole_DAgger_June25",           # your project name
     entity="electic",         # your WandB username or team name
-    name="cartpole-dagger-[150,100,500,5000]",    # optional: name of this specific run
+    name=f"R_[{timestamp}]",    # optional: name of this specific run
 )
 
 logger = imit_logger.configure(
@@ -78,7 +78,7 @@ env = vec_env.DummyVecEnv([
                                    max_episode_steps=env_max_episode_steps)])
 env.seed(0)
 
-# -------Create expert trajectories----------
+# -------Create expert trajectories from a pre-trained policy----------
 initial_policy = load_policy(
     "ppo-huggingface",
     organization="HumanCompatibleAI",
