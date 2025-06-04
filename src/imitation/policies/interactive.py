@@ -2,6 +2,7 @@
 
 import abc
 import collections
+import wandb
 from typing import Dict, Optional, Union
 
 import gymnasium as gym
@@ -194,7 +195,7 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
                     
     """
 
-    def __init__(self, env, *args, **kwargs):
+    def __init__(self, env, wand_run, *args, **kwargs):
         """It does not learn, does not predict, and has no weights — 
         its purely a wrapper that lets a human act as the policy."""
 
@@ -206,6 +207,8 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
         print('action_space:', action_space)
         # Define two actions: LEFT = 0, RIGHT = 1
         self.key_to_action = {'a': 0, 'd': 1}
+        self.wand_run = wand_run  # WandB run for logging if needed
+        self.count = 0
         super().__init__(observation_space, action_space)
 
     def _choose_action(self, obs):
@@ -221,6 +224,10 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
 
         while key not in self.key_to_action:
             key = input("Invalid key! Choose again (a/d): ").strip().lower()
+        
+        self.count += 1
+        # self.wand_run.log({"interaction_count": self.count})
+        print(f"\033[96m\nHuman interaction: {self.count}\033[0m")
 
         return np.array([self.key_to_action[key]])
 

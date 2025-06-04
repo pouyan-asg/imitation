@@ -455,6 +455,7 @@ def generate_trajectories(
     while np.any(active):
         # policy gets unwrapped observations (eg as dict, not dictobs)
         acts, state = get_actions(obs, state, dones)
+        acts = acts.astype(int)
         obs, rews, dones, infos = venv.step(acts)
         assert isinstance(
             obs,
