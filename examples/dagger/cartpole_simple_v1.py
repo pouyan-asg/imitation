@@ -38,7 +38,7 @@ expert = load_policy(
 bc_trainer = bc.BC(
     observation_space=env.observation_space,
     action_space=env.action_space,
-    rng=np.random.default_rng(),
+    rng=rn_seed,
 )
 
 dagger_trainer = SimpleDAggerTrainer(

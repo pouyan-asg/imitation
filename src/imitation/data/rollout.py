@@ -732,6 +732,12 @@ def rollout(
         rng=rng,
         **kwargs,
     )
+    
+    for traj in trajs:
+        with open("rollout.txt", "a") as f:
+            f.write(f"Trajectory: {traj}\n")
+        
+        
     if unwrap:
         trajs = [unwrap_traj(traj) for traj in trajs]
     if exclude_infos:

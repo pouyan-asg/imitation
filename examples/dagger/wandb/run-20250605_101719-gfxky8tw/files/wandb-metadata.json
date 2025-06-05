@@ -1,0 +1,43 @@
+{
+  "os": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+  "python": "CPython 3.9.22",
+  "startedAt": "2025-06-05T14:17:19.642653Z",
+  "program": "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/cartpole_interactive.py",
+  "codePath": "examples/dagger/cartpole_interactive.py",
+  "git": {
+    "remote": "git@github.com:pouyan-asg/imitation.git",
+    "commit": "4719995a33b87cdc3da8dedc78e273d77be52be3"
+  },
+  "email": "pouyan.asgharian@yahoo.com",
+  "root": "/home/pouyan/phd/imitation_learning/imitation/examples/dagger",
+  "host": "pouyan-XPS-15-9500",
+  "executable": "/home/pouyan/anaconda3/envs/imit/bin/python",
+  "codePathLocal": "cartpole_interactive.py",
+  "cpu_count": 8,
+  "cpu_count_logical": 16,
+  "gpu": "NVIDIA GeForce GTX 1650 Ti",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "290752806912",
+      "used": "236593659904"
+    }
+  },
+  "memory": {
+    "total": "33382023168"
+  },
+  "cpu": {
+    "count": 8,
+    "countLogical": 16
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce GTX 1650 Ti",
+      "memoryTotal": "4294967296",
+      "cudaCores": 1024,
+      "architecture": "Turing",
+      "uuid": "GPU-e8f597c9-46ee-7653-bab1-1a5a4a7305f0"
+    }
+  ],
+  "cudaVersion": "12.5"
+}

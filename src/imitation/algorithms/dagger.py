@@ -318,6 +318,9 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
         assert self._last_user_actions is not None
         self._last_obs = next_obs
 
+        # print(infos[0])  # total reward of the episode
+
+
         # This is where recording into the dataset happens
         fresh_demos = self.traj_accum.add_steps_and_auto_finish(
             obs=next_obs,
