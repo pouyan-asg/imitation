@@ -204,6 +204,7 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
             save_dir: directory to save collected trajectories in.
             rng: random state for random number generation.
         """
+
         super().__init__(venv)
         self.get_robot_acts = get_robot_acts
         assert 0 <= beta <= 1
@@ -320,7 +321,6 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
 
         # print(infos[0])  # total reward of the episode
 
-
         # This is where recording into the dataset happens
         fresh_demos = self.traj_accum.add_steps_and_auto_finish(
             obs=next_obs,
@@ -364,7 +364,7 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
     fresh set of demonstrations, and then an underlying `BC` is invoked to
     fine-tune the policy on the entire set of demonstrations collected in all
     rounds so far. Demonstrations and policy/trainer checkpoints are stored in a
-    directory with the following structure::
+    directory with the following structure:
 
        scratch-dir-name/
            checkpoint-001.pt
@@ -598,7 +598,7 @@ class DAggerTrainer(base.BaseImitationAlgorithm):
         if "n_epochs" not in user_keys and "n_batches" not in user_keys:
             bc_train_kwargs["n_epochs"] = self.DEFAULT_N_EPOCHS
 
-        logging.info("Loading demonstrations")
+        logging.info("\nLoading demonstrations")
         self._try_load_demos()
         logging.info(f"Training at round {self.round_num}")
         self.bc_trainer.train(**bc_train_kwargs)
@@ -805,11 +805,11 @@ class SimpleDAggerTrainer(DAggerTrainer):
             InteractiveTrajectoryCollector class has some internal functions which will be run.
             when we want to create trajectory samples, we use 'rollout.generate_trajectories' with
             expert policy and collector which is a more compelet version of the environment.
-            in 'rollout.generate_trajectories' we have venv.step() and venv.reset(). the .step()
+            in 'rollout.generate_trajectories' we have venv.step() and venv.reset(). The .step()
             function connects to same one in 'base_vec_env.py'. Note that 'InteractiveTrajectoryCollector' class 
             inhrites from VecEnvWrapper class which is a child of abstract class 'VecEnv'.
             so, step() is a function of 'VecEnv' class. in this original function, two other functions
-            run including step_async() and step_wait(). However, since this class is an abstract version,
+            run include step_async() and step_wait(). However, since this class is an abstract version,
             both latter functions will be run through child class which is 'InteractiveTrajectoryCollector'.
 
             if you check step_async() and step_wait() functions inside 'InteractiveTrajectoryCollector' class,
@@ -872,7 +872,26 @@ class InteractiveDAggerTrainer(DAggerTrainer):
     """
     a copy of SimpleDAggerTrainer but with some modifications.
     please refer to the SimpleDAggerTrainer class for more information.
+
+    *** Note: since we are passing BC trainer to this class, it will br used
+    in all functions of DAggerTrainer class. Don't be confused!
     """
+    """
+    How Training function Works and what is the role of collector?:
+
+    rollout.generate_trajectories
+        |
+        v
+    calls collector.reset()  --> InteractiveTrajectoryCollector.reset()
+        |
+    calls collector.step(acts) --> InteractiveTrajectoryCollector.step_async(acts)
+                                    |
+                                    --> β-mixing, data recording
+                                InteractiveTrajectoryCollector.step_wait()
+                                    |
+                                    --> data recording, trajectory saving
+    """
+
 
     def __init__(
         self,
@@ -904,9 +923,10 @@ class InteractiveDAggerTrainer(DAggerTrainer):
         #   Might welcome Transitions and DataLoaders as sources of expert data
         #   in the future too, but this will require some refactoring, so for
         #   now we just have `expert_trajs`.
+
         if expert_trajs is not None:
             # Save each initial expert trajectory into the "round 0" demonstration
-            print("expert trajs:", len(expert_trajs))
+            print(f"\033[93m\nexpert trajs: {len(expert_trajs)}\n\033[0m")
             for traj_index, traj in enumerate(expert_trajs):
                 _save_dagger_demo(
                     traj,
@@ -929,8 +949,13 @@ class InteractiveDAggerTrainer(DAggerTrainer):
         round_num = 0
 
         while total_timestep_count < total_timesteps:
-            print(f"\033[93m\nStarting round {round_num} with total_timestep_count={total_timestep_count}\033[0m")
+            print(f"\033[93m\nStarting round={round_num} with total_timestep_count={total_timestep_count}\033[0m")
 
+            """
+            collector is an instance of InteractiveTrajectoryCollector, 
+            which wraps your environment and adds DAgger-specific 
+            logic (like β-mixing and data recording).
+            """
             collector = self.create_trajectory_collector()
 
             round_episode_count = 0
@@ -941,6 +966,18 @@ class InteractiveDAggerTrainer(DAggerTrainer):
                 min_episodes=rollout_round_min_episodes,
             )
 
+
+            """
+            below line performs the data collection step. It runs the expert policy 
+            in the environment (with β-mixing via the collector) and records 
+            the resulting trajectories.
+
+            generate_trajectories interacts with the environment (venv=collector) by 
+            repeatedly calling step() and reset(). The collector is an InteractiveTrajectoryCollector, 
+            which wraps the environment and handles the β-mixing (deciding whether to use the expert or 
+            the learner action at each step). During this process, the collector records all 
+            (obs, expert action) pairs and saves them for later training.
+            """
             trajectories = rollout.generate_trajectories(
                 policy=self.expert_policy,
                 venv=collector,
@@ -956,7 +993,6 @@ class InteractiveDAggerTrainer(DAggerTrainer):
                 f.write("\n")
 
             for traj in trajectories:
-
                 self._logger.record_mean(
                     "dagger/mean_episode_reward",
                     np.sum(traj.rews),
@@ -982,5 +1018,9 @@ class InteractiveDAggerTrainer(DAggerTrainer):
                 step=round_num,
             )
 
+            # the expert actions are already saved in the demonstration files 
+            # during the trajectory collection phase.
+            # The BC trainer just needs to know where to find the data 
+            # (which is handled by the DAgger trainer’s internal logic).
             self.extend_and_update(bc_train_kwargs)
             round_num += 1

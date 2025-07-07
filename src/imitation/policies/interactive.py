@@ -167,18 +167,18 @@ class AtariInteractivePolicy(ImageObsDiscreteInteractivePolicy):
 class CartPoleInteractiveExpert(NonTrainablePolicy):
     """Interactive policy for CartPole using keyboard input and live rendering.
     this class depends on NonTrainablePolicy class which is an abstract class. 
-    NonTrainablePolicy Inherits from BasePolicy (used by all SB3 policies).
+    NonTrainablePolicy inherits from BasePolicy (used by all SB3 policies).
     
     note: _choose_action should be defined in this child class.
 
-    CartPoleInteractivePolicy
+    CartPoleInteractiveExpert
     └── inherits from NonTrainablePolicy
             └── inherits from BasePolicy
                     └── inherits from BaseModel (nn.Module)
 
     - How this class works and what is the objectove?
-        -- objective: creating a set of (state , action) which observation comes from gym
-        environment and action comes from human expert.
+        -- objective: creating a set of (state , action) in which observations come from gym
+        environment and actions come from human expert.
         -- architecture: observation from gym environment and human actions send to NonTrainablePolicy class.
         Actually, actions send through _choose_action to NonTrainablePolicy. In NonTrainablePolicy class,
         _predict depends on _choose_action and it finally sends tensor actions to BasePolicy class.
@@ -203,8 +203,8 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
         # self.env_render_func = env.envs[0].render  # real-time rendering
         observation_space = env.observation_space
         action_space = env.action_space
-        print('observation_space:', observation_space)
-        print('action_space:', action_space)
+        print('\nobservation_space:', observation_space)
+        print('\naction_space:', action_space)
         # Define two actions: LEFT = 0, RIGHT = 1
         self.key_to_action = {'a': 0, 'd': 1}
         self.wand_run = wand_run  # WandB run for logging if needed
@@ -230,7 +230,6 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
         print(f"\033[96m\nHuman interaction: {self.count}\033[0m")
 
         return np.array([self.key_to_action[key]])
-
 
 
 class CartPoleDiscreteInteractivePolicy(DiscreteInteractivePolicy):
@@ -265,4 +264,50 @@ class CartPoleDiscreteInteractivePolicy(DiscreteInteractivePolicy):
         pass  # No need to close anything
 
 
-    
+class RacingInteractiveExpert(NonTrainablePolicy):
+    """Interactive policy for Car Racing using keyboard input and live rendering.
+    this class depends on NonTrainablePolicy class which is an abstract class. 
+    NonTrainablePolicy Inherits from BasePolicy (used by all SB3 policies).
+
+    Car Racing observation space is a top-down 96x96 RGB image of the car and race track.
+    Car Racing action space is continues with following elements: 
+        0: steering (-1 is full left, +1 is full right),
+        1: gas,
+        2: breaking.
+    """
+
+    def __init__(self, env, wand_run, *args, **kwargs):
+        """It does not learn, does not predict, and has no weights — 
+        its purely a wrapper that lets a human act as the policy."""
+
+        assert isinstance(env, vec_env.VecEnv)
+        observation_space = env.observation_space
+        action_space = env.action_space
+        print('observation_space:', observation_space)
+        print('action_space:', action_space)
+        self.key_to_action = {
+            'a': np.array([-1.0, 0.0, 0.0]),  # Left steering hard
+            'd': np.array([1.0, 0.0, 0.0]),   # Right steering hard
+            # 'q': np.array([-0.5, 0.0, 0.0]),  # Left steering soft
+            # 'e': np.array([0.5, 0.0, 0.0]),   # Right steering soft
+            'w': np.array([0.0, 1.0, 0.0]),   # Gas
+            's': np.array([0.0, 0.0, 1.0]),   # Brake
+            'x': np.array([0.0, 0.0, 0.0]),   # Do nothing
+        }
+        self.wand_run = wand_run
+        self.count = 0
+        super().__init__(observation_space, action_space)
+
+    def _choose_action(self, obs):
+        # print("\n🧠 Observation:", obs)
+        print("Choose action - Left(a), Right(d), Gas(w), Brake(s), Off(x):")
+        key = input("Your action: ").strip().lower()
+
+        while key not in self.key_to_action:
+            key = input("Invalid key! Choose again (a/d): ").strip().lower()
+        
+        self.count += 1
+        # self.wand_run.log({"interaction_count": self.count})
+        print(f"\033[96m\nHuman interaction: {self.count}\033[0m")
+
+        return np.array([self.key_to_action[key]])

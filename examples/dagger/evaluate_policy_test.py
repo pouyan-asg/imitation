@@ -4,6 +4,8 @@ import collections
 import numpy as np
 import gymnasium as gym
 from stable_baselines3.common import vec_env
+from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
+from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.algorithms import bc, dagger
 from imitation.algorithms.dagger import SimpleDAggerTrainer
 from imitation.policies.base import NonTrainablePolicy
@@ -20,19 +22,26 @@ from imitation.util.util import make_vec_env
 import gymnasium as gym
 from stable_baselines3.common import vec_env
 
-env = vec_env.DummyVecEnv([
-    lambda: gym.wrappers.TimeLimit(
-        gym.make("CartPole-v1", render_mode="human"),  # must include render_mode
-        max_episode_steps=200,
-    )
-])
+# env = vec_env.DummyVecEnv([
+#     lambda: gym.wrappers.TimeLimit(
+#         gym.make("CartPole-v1", render_mode="human"),  # must include render_mode
+#         max_episode_steps=200,
+#     )
+# ])
+
+env = VecTransposeImage(DummyVecEnv([lambda: RolloutInfoWrapper(gym.make(
+                                    id="CarRacing-v2", 
+                                    render_mode="human",
+                                    lap_complete_percent=0.95,
+                                    domain_randomize=False,
+                                    continuous=True))]))
 env.seed(0)
 
 import torch
 from imitation.algorithms.dagger import SimpleDAggerTrainer
 from torch.serialization import safe_globals
 
-checkpoint_path = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs/2025_06_02_11_40/policy-latest.pt"
+checkpoint_path = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs/20250609_1356/policy-latest.pt"
 
 with safe_globals([SimpleDAggerTrainer]):
     trainer = torch.load(checkpoint_path, map_location="cpu", weights_only=False)

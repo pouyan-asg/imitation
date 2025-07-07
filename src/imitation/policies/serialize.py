@@ -1,4 +1,7 @@
-"""Load serialized policies of different types."""
+"""Load serialized policies of different types.
+A registry-based system for loading different types of RL policies 
+(random, zero, PPO, SAC, etc.) from various sources (local files, 
+Hugging Face Hub)."""
 
 # FIXME(sam): it seems like this module could mostly be replaced with a few
 # torch.load() and torch.save() calls
@@ -144,6 +147,7 @@ def _add_stable_baselines_policies_from_huggingface(classes):
         policy_registry.register(f"{k}-huggingface", value=fn)
 
 
+# When this file is imported or run, these two functions are called immediately.
 STABLE_BASELINES_CLASSES = {
     "ppo": "stable_baselines3:PPO",
     "sac": "stable_baselines3:SAC",
@@ -160,7 +164,6 @@ def load_policy(
     """Load serialized policy.
 
     Note on the kwargs:
-
     - `zero` and `random` policy take no kwargs
     - `ppo` and `sac` policies take a `path` argument with a path to a zip file or to a
       folder containing a `model.zip` file.

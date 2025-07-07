@@ -2,6 +2,19 @@ import os
 import numpy as np
 import gymnasium as gym
 import wandb
+<<<<<<< HEAD
+import imitation.algorithms.dagger as dagger
+import imitation.util.logger as imit_logger
+from imitation.data.wrappers import RolloutInfoWrapper
+from imitation.algorithms import bc
+from imitation.util import util
+from imitation.policies import interactive
+from imitation.policies.serialize import load_policy
+from imitation.data import rollout, serialize, types
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
+from datetime import datetime
+=======
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.algorithms import bc
@@ -13,6 +26,7 @@ from datetime import datetime
 import imitation.util.logger as imit_logger
 from imitation.policies.serialize import load_policy
 from imitation.data import rollout, serialize, types
+>>>>>>> 9374b46c7b0c6dcf5cfde71d0cb842e567349ee7
 
 
 """

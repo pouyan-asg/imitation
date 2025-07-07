@@ -1,18 +1,27 @@
 import os
 import numpy as np
-import gymnasium as gym
 import wandb
-from stable_baselines3.common import vec_env
-from imitation.algorithms import bc
-import imitation.algorithms.dagger as dagger
-from imitation.util import util
-from stable_baselines3.common.evaluation import evaluate_policy
-from imitation.policies import interactive
-from datetime import datetime
+import gymnasium as gym
 import imitation.util.logger as imit_logger
+from datetime import datetime
+from imitation.algorithms import bc
+from imitation.algorithms import dagger
+from imitation.util import util
+from imitation.policies import interactive
 from imitation.policies.serialize import load_policy
 from imitation.data import rollout, serialize, types
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common import vec_env
 
+
+"""
+some genral definitions about DAgger:
+- A time step is a single interaction with the environment. It includes: Getting an observation,
+    Choosing an action, Applying it, Getting the next observation and reward.
+- An episode is a single run of the environment from start to termination:
+    pole falls, goes out of bounds, or reaches the maximum number of steps.
+- A round in DAgger is one iteration of the training loop: query the expert, collect data, train the policy.
+"""
 
 """
 - max_episode_steps: maximum number of steps in one episode which means total number that 
@@ -21,11 +30,12 @@ from imitation.data import rollout, serialize, types
         --  Why it matters: Prevents endless episodes and ensures the agent 
             gets diverse starting conditions.
 - total_timesteps: total number of all episodes that the agent will train. 
-    Training will loop until it has seen at least 'total_timesteps in each environment (not policy steps, env steps).
-- rollout_round_min_episodes: This is part of the DAgger training loop. 
+    Training will loop until it has seen at least 'total_timesteps in each environment 
+    (not policy steps, env steps).
+- rollout_round_min_episodes (train_min_episodes): This is part of the DAgger training loop. 
     In each round, DAgger will collect at least 'rollout_round_min_episodes' full 
     episode (from expert + some learner actions).
-- rollout_round_min_timesteps: Each DAgger round must collect at least 
+- rollout_round_min_timesteps (train_min_timesteps): Each DAgger round must collect at least 
     'rollout_round_min_timesteps' steps total, no matter how many episodes it takes.
 - n_eval_episodes: This controls how many test episodes are run after training 
     is done. Each episode normally contains 'max_episode_steps' steps.
@@ -52,7 +62,7 @@ scale up to parallel training later — without changing your core code.
 # -------Initialize----------
 rng = np.random.default_rng(0)
 root_path = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs"
-timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+timestamp = datetime.now().strftime("%Y.%m.%d_%H:%M")
 logs_dir = os.path.join(root_path, f"{timestamp}")
 
 env_max_episode_steps = 100
@@ -68,7 +78,7 @@ n_eval_episodes = 50
 # n_eval_episodes = 2
 
 run = wandb.init(
-    project="CartPole_DAgger_June25",           # your project name
+    project="CartPole_DAgger_July25",           # your project name
     entity="electic",         # your WandB username or team name
     name=f"R_[{timestamp}]",    # optional: name of this specific run
 )

@@ -27,7 +27,7 @@ env = vec_env.DummyVecEnv([
 env.seed(0)
 
 # -------Create expert trajectories from a pre-trained policy----------
-expert = load_policy(
+initial_policy = load_policy(
     policy_type="ppo-huggingface",
     organization="HumanCompatibleAI",
     env_name="CartPole-v1",
@@ -44,7 +44,7 @@ bc_trainer = bc.BC(
 dagger_trainer = SimpleDAggerTrainer(
     venv=env,
     scratch_dir=logs_dir,
-    expert_policy=expert,
+    expert_policy=initial_policy,
     bc_trainer=bc_trainer,
     rng=rn_seed,
 )
