@@ -415,7 +415,8 @@ class BC(algo_base.DemonstrationAlgorithm):
                 defaults to `FeedForward32Policy`.
                     - FeedForward32Policy: A small, fully connected neural network with 
                         two hidden layers of 32 units. It's used as the default architecture 
-                        for BC tasks in simple environments like CartPole. 
+                        for BC tasks in simple environments like CartPole.
+                    - if policy is None, the policy is an actor-critic policy.
             demonstrations: Demonstrations from an expert (optional). Transitions
                 expressed directly as a `types.TransitionsMinimal` object, a sequence
                 of trajectories, or an iterable of transition batches (mappings from
@@ -507,6 +508,7 @@ class BC(algo_base.DemonstrationAlgorithm):
     # This @property turns self.policy into a read-only attribute that simply 
     # returns self._policy. So anytime you access self.policy, Python calls that 
     # @property method and returns the actual object stored in self._policy.
+    # This means anywhere in the class where you use self.policy, you are actually accessing self._policy.
     @property
     def policy(self) -> policies.ActorCriticPolicy:
         return self._policy

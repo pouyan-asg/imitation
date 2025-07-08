@@ -65,17 +65,17 @@ root_path = "/home/pouyan/phd/imitation_learning/imitation/examples/dagger/logs"
 timestamp = datetime.now().strftime("%Y.%m.%d_%H:%M")
 logs_dir = os.path.join(root_path, f"{timestamp}")
 
-env_max_episode_steps = 100
-train_min_episodes = 10
-train_min_timesteps = 50
-total_timesteps = 5000
-n_eval_episodes = 50
+# env_max_episode_steps = 100
+# train_min_episodes = 10
+# train_min_timesteps = 50
+# total_timesteps = 5000
+# n_eval_episodes = 50
 
-# env_max_episode_steps = 3
-# train_min_episodes = 1
-# train_min_timesteps = 1
-# total_timesteps = 50
-# n_eval_episodes = 2
+env_max_episode_steps = 3
+train_min_episodes = 1
+train_min_timesteps = 1
+total_timesteps = 10
+n_eval_episodes = 2
 
 run = wandb.init(
     project="CartPole_DAgger_July25",           # your project name

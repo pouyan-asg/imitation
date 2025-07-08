@@ -300,7 +300,14 @@ def policy_to_callable(
     venv: VecEnv,
     deterministic_policy: bool = False,
 ) -> PolicyCallable:
-    """Converts any policy-like object into a function from observations to actions."""
+    """Converts any policy-like object into a function from observations to actions.
+        
+    policy_to_callable is a utility that wraps any policy (including interactive ones) 
+    into a function called get_actions that takes observations and returns actions. 
+    If the policy is a BasePolicy (which your interactive expert is), it uses the .predict() method.
+    For your interactive expert, policy.predict() is ultimately implemented by 
+    BasePolicy, which calls NonTrainablePolicy._predict(), which in turn calls your _choose_action(obs).
+    """
     get_actions: PolicyCallable
     if policy is None:
 
@@ -317,6 +324,7 @@ def policy_to_callable(
         # are themselves Callable (which we check next). But in their case,
         # we want to use the .predict() method, rather than __call__()
         # (which would call .forward()). So this elif clause must come first!
+        """for interactive expert, this is our policy type"""
 
         def get_actions(
             observations: Union[np.ndarray, Dict[str, np.ndarray]],
@@ -425,7 +433,7 @@ def generate_trajectories(
     trajectories = []
     # accumulator for incomplete trajectories
     trajectories_accum = TrajectoryAccumulator()
-    obs = venv.reset()
+    obs = venv.reset()  # oorigin observations
     assert isinstance(
         obs,
         (np.ndarray, dict),

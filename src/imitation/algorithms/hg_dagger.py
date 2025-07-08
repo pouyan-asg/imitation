@@ -1,9 +1,8 @@
-"""DAgger (https://arxiv.org/pdf/1011.0686.pdf).
+"""HG-DAgger (https://arxiv.org/pdf/1810.02890).
 
-Interactively trains policy by collecting some demonstrations, doing BC, collecting more
-demonstrations, doing BC again, etc. Initially the demonstrations just come from the
-expert's policy; over time, they shift to be drawn more and more from the imitator's
-policy.
+HG-DAgger is a human-in-the-loop version of DAgger (Dataset Aggregation),
+which is an imitation learning algorithm that iteratively collects
+demonstrations from a human expert and uses them to improve a policy.
 """
 
 import abc

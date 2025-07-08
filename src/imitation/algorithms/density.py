@@ -2,6 +2,19 @@
 
 Each of these algorithms learns a density estimate on some aspect of the demonstrations,
 then rewards the agent for following that estimate.
+
+ME:
+DensityAlgorithm is an imitation learning algorithm that learns a reward function 
+by estimating the probability density of expert demonstrations (over states, state-actions, 
+or state-next_state pairs). The agent is then rewarded for visiting regions of high density—i.e., 
+behaving similarly to the expert. This is done using non-parametric density estimation 
+(like Kernel Density Estimation) on the demonstration data, and then using the log-probability 
+as a reward signal for RL.
+
+In short:
+It encourages the agent to imitate the expert by rewarding it for visiting states 
+(or taking actions) that are likely under the expert’s behavior distribution.
+
 """
 
 import enum

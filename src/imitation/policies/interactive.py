@@ -216,6 +216,10 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
         """
         It waits for keyboard input ('a' for left, 'd' for right) 
         and outputs discrete actions (0 or 1) based on user choice.
+
+        observation (obs) comes from environment reset in data collection phase.
+        look at 'generate_trajectories' in rollout.py file. 
+        At the start of data collection, the environment is reset: obs = venv.reset()
         """
 
         print("\n🧠 Observation:", obs)
