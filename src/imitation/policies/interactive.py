@@ -188,6 +188,19 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
             ⟶ BasePolicy.predict()
                 ⟶ NonTrainablePolicy._predict()
                      ⟶ YourPolicy._choose_action(obs) ← Keyboard interaction
+    
+    In Python, when you call a method on an object (e.g., policy.predict()), the self inside that 
+    method refers to the actual object you called it on.
+    If you created your policy like this:
+    then policy is an instance of CartPoleInteractiveExpert.
+    When you call policy.predict(obs), the method is defined in the parent class (BasePolicy), 
+    but inside that method, self refers to your CartPoleInteractiveExpert object.
+    So, when BasePolicy.predict() calls self._predict(...), Python looks for the _predict method 
+    in the most-derived class (CartPoleInteractiveExpert → NonTrainablePolicy → BasePolicy). 
+    If CartPoleInteractiveExpert doesn't define _predict, but NonTrainablePolicy does, that version is used.
+    This is called dynamic dispatch or polymorphism:
+    The actual method called depends on the real type of the object (self), not just the type 
+    where the method is defined.
 
 
     Cartpole observation space is a 4-dimensional vector: cart position, cart velocity, pole angle, and pole angular velocity.

@@ -298,6 +298,11 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
         # Even though there's no for loop, vectorized NumPy operations like 
         # array[mask] = ... behave just like looping over the True values in 
         # mask — they're just faster and cleaner.
+        """"
+        For each environment where mask is True, we replace the expert's action 
+        (initially in actual_acts) with the learner's action.
+        For environments where mask is False, we keep the expert's action.
+        """
         if np.sum(mask) != 0:
             actual_acts[mask] = self.get_robot_acts(self._last_obs[mask])
         
@@ -912,7 +917,7 @@ class InteractiveDAggerTrainer(DAggerTrainer):
         expert_policy: policies.BasePolicy,
         rng: np.random.Generator,
         expert_trajs: Optional[Sequence[types.Trajectory]] = None,
-        wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
+        # wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
         **dagger_trainer_kwargs,
     ):
         super().__init__(
@@ -928,7 +933,7 @@ class InteractiveDAggerTrainer(DAggerTrainer):
             )
         if expert_policy.action_space != self.venv.action_space:
             raise ValueError("Mismatched action space between expert_policy and venv")
-        self.wandb_run = wandb_run
+        # self.wandb_run = wandb_run
 
         # TODO(shwang):
         #   Might welcome Transitions and DataLoaders as sources of expert data
@@ -1022,16 +1027,16 @@ class InteractiveDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_episode_count", round_episode_count)
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
-            self.wandb_run.log(
-                {
-                    "dagger/total_timesteps": total_timestep_count,
-                    "dagger/round_episode_count": round_episode_count,
-                    "dagger/round_timestep_count": round_timestep_count,
-                    "dagger/mean_episode_reward": np.sum(traj.rews),
-                    "dagger/beta": self.beta,
-                },
-                step=round_num,
-            )
+            # self.wandb_run.log(
+            #     {
+            #         "dagger/total_timesteps": total_timestep_count,
+            #         "dagger/round_episode_count": round_episode_count,
+            #         "dagger/round_timestep_count": round_timestep_count,
+            #         "dagger/mean_episode_reward": np.sum(traj.rews),
+            #         "dagger/beta": self.beta,
+            #     },
+            #     step=round_num,
+            # )
 
             # the expert actions are already saved in the demonstration files 
             # during the trajectory collection phase.

@@ -334,6 +334,7 @@ def policy_to_callable(
             assert isinstance(policy, (BaseAlgorithm, BasePolicy))
             # pytype doesn't seem to understand that policy is a BaseAlgorithm
             # or BasePolicy here, rather than a Callable
+            """main part!"""
             (acts, states) = policy.predict(  # pytype: disable=attribute-error
                 observations,
                 state=states,
@@ -427,7 +428,7 @@ def generate_trajectories(
         may be collected to avoid biasing process towards short episodes; the user
         should truncate if required.
     """
-    get_actions = policy_to_callable(policy, venv, deterministic_policy)
+    get_actions = policy_to_callable(policy, venv, deterministic_policy)  # query expert or pre-defined policy
 
     # Collect rollout tuples.
     trajectories = []
@@ -464,7 +465,7 @@ def generate_trajectories(
         # policy gets unwrapped observations (eg as dict, not dictobs)
         acts, state = get_actions(obs, state, dones)
         acts = acts.astype(int)
-        obs, rews, dones, infos = venv.step(acts)
+        obs, rews, dones, infos = venv.step(acts)  # env step by expert action or agent policy
         assert isinstance(
             obs,
             (np.ndarray, dict),
@@ -482,6 +483,7 @@ def generate_trajectories(
         # This ensures that only active environments can be marked as done.
         dones &= active
 
+        # save expert action in any case (look at _last_user_actions in step_async())
         new_trajs = trajectories_accum.add_steps_and_auto_finish(
             acts,
             wrapped_obs,
@@ -741,9 +743,9 @@ def rollout(
         **kwargs,
     )
     
-    for traj in trajs:
-        with open("rollout.txt", "a") as f:
-            f.write(f"Trajectory: {traj}\n")
+    # for traj in trajs:
+    #     with open("rollout.txt", "a") as f:
+    #         f.write(f"Trajectory: {traj}\n")
         
         
     if unwrap:
