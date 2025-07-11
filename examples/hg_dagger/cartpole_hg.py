@@ -38,17 +38,17 @@ root_path = "/home/pouyan/phd/imitation_learning/imitation/examples/hg_dagger/lo
 timestamp = datetime.now().strftime("%Y.%m.%d_%H:%M")
 logs_dir = os.path.join(root_path, f"{timestamp}")
 
-# env_max_episode_steps = 100
-# train_min_episodes = 10
-# train_min_timesteps = 50
-# total_timesteps = 5000
-# n_eval_episodes = 50
+env_max_episode_steps = 100
+train_min_episodes = 10
+train_min_timesteps = 50
+total_timesteps = 5000
+n_eval_episodes = 50
 
-env_max_episode_steps = 3
-train_min_episodes = 1
-train_min_timesteps = 1
-total_timesteps = 10
-n_eval_episodes = 2
+# env_max_episode_steps = 3
+# train_min_episodes = 1
+# train_min_timesteps = 1
+# total_timesteps = 10
+# n_eval_episodes = 2
 
 # run = wandb.init(
 #     project="CartPole_HG-DAgger_July25",           # your project name
@@ -68,27 +68,27 @@ env = vec_env.DummyVecEnv([
 env.seed(0)
 
 # -------Create expert trajectories from a pre-trained policy----------
-initial_policy = load_policy(
+agent_policy = load_policy(
     policy_type="ppo-huggingface",
     organization="HumanCompatibleAI",
     env_name="CartPole-v1",
     venv=env,
 )
 
-sample_until = rollout.make_sample_until(
-    min_timesteps=train_min_timesteps,
-    min_episodes=train_min_episodes,)
+# sample_until = rollout.make_sample_until(
+#     min_timesteps=train_min_timesteps,
+#     min_episodes=train_min_episodes,)
 
-exprt_trajs = rollout.generate_trajectories(
-    policy=initial_policy,
-    venv=env,
-    sample_until=sample_until,
-    deterministic_policy=True,
-    rng=rng,
-)
+# exprt_trajs = rollout.generate_trajectories(
+#     policy=agent_policy,
+#     venv=env,
+#     sample_until=sample_until,
+#     deterministic_policy=True,
+#     rng=rng,
+# )
 
 # -------Prepare expert and algorithm----------
-# expert = interactive.CartPoleInteractiveExpert(env, run)
+expert_policy = interactive.CartPoleHG(env)
 
 bc_trainer = bc.BC(
     observation_space=env.observation_space,
@@ -100,10 +100,11 @@ bc_trainer = bc.BC(
 hgdagger_trainer = hg_dagger.InteractiveHgDAggerTrainer(
     venv=env,
     scratch_dir=logs_dir,
-    expert_policy=initial_policy,
+    expert_policy=expert_policy,
+    agent_policy=agent_policy,
     bc_trainer=bc_trainer,
     rng=rng,
-    expert_trajs=exprt_trajs,
+    # expert_trajs=exprt_trajs,
     # wandb_run=run,
 )
 

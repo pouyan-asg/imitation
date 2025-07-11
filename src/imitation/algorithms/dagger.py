@@ -300,11 +300,22 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
         # mask — they're just faster and cleaner.
         """"
         For each environment where mask is True, we replace the expert's action 
-        (initially in actual_acts) with the learner's action.
+        (initially in actual_acts) with the learner's action (can be (by chance) the same or difference).
         For environments where mask is False, we keep the expert's action.
+        
+        Dont forget that actions are 0 or 1 and final result is either [0] or [1] for each step.
         """
+        # print(f"actual_acts: {actual_acts}")
         if np.sum(mask) != 0:
             actual_acts[mask] = self.get_robot_acts(self._last_obs[mask])
+            # print('-'*20)
+            # print(f"actual_acts: {actual_acts}")
+            # print(f"mask: {mask}")
+            # print(f"_last_obs: {self._last_obs}")
+            # print(f"actual_acts[mask]: {actual_acts[mask]}")
+            # print(f"self._last_obs[mask]: {self._last_obs[mask]}")
+            # print(f"\033[94mRobot actions: {self.get_robot_acts(self._last_obs[mask])}\033[0m")
+            # print('-'*20 + "\n")
         
         """
         while π_i = β_i * π* + (1 - β_i) * π̂_i is not explicity shown but when we select
@@ -926,6 +937,8 @@ class InteractiveDAggerTrainer(DAggerTrainer):
             rng=rng,
             **dagger_trainer_kwargs,
         )
+
+        self.log_dir = scratch_dir
         self.expert_policy = expert_policy  # initial expert policy
         if expert_policy.observation_space != self.venv.observation_space:
             raise ValueError(
@@ -1002,7 +1015,7 @@ class InteractiveDAggerTrainer(DAggerTrainer):
                 rng=collector.rng,
             )
 
-            with open("logs/logs.txt", "a") as f:
+            with open(f"{self.log_dir}/logs.txt", "a") as f:
                 f.write('-'*20 + "\n")
                 f.write(f"Round {round_num} trajectories:\n")
                 f.write(f"Total trajectories collected: {len(trajectories)}\n")

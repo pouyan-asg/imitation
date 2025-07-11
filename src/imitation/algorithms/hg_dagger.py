@@ -163,17 +163,17 @@ class InteractiveTrajectoryCollector(vec_env.VecEnvWrapper):
         # This could be passed in, or you could get it from your controller/environment.
         # For illustration, let's say it's passed as an attribute or computed here:
         # is_takeover = self._get_takeover_flags()  # shape: (num_envs,)
-        is_takeover = False
+        # is_takeover = False
 
         actual_acts = np.array(actions)
-        # For environments where human is NOT intervening, use the learner's action
-        # TODO it should be for more than one environment. use:  if np.any(~is_takeover):
-        if is_takeover == False:
-            actual_acts[~is_takeover] = self.get_robot_acts(self._last_obs[~is_takeover])
-            print(f"\033[94mLearner used in envs\033[0m")
-        else:
-            self._last_user_actions = actions  # Save expert actions for logging/dataset
-            print(f"\033[94mExpert used in envs\033[0m")
+        # # For environments where human is NOT intervening, use the learner's action
+        # # TODO it should be for more than one environment. use:  if np.any(~is_takeover):
+        # if is_takeover == False:
+        #     actual_acts[~is_takeover] = self.get_robot_acts(self._last_obs[~is_takeover])
+        #     print(f"\033[94mLearner used in envs\033[0m")
+        # else:
+        self._last_user_actions = actions  # Save expert actions for logging/dataset
+            # print(f"\033[94mExpert used in envs\033[0m")
         
         self.venv.step_async(actual_acts)
     
@@ -526,6 +526,7 @@ class InteractiveHgDAggerTrainer(HgDAggerTrainer):
         venv: vec_env.VecEnv,
         scratch_dir: types.AnyPath,
         expert_policy: policies.BasePolicy,
+        agent_policy: policies.BasePolicy,
         rng: np.random.Generator,
         expert_trajs: Optional[Sequence[types.Trajectory]] = None,
         # wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
@@ -540,11 +541,17 @@ class InteractiveHgDAggerTrainer(HgDAggerTrainer):
         
         # self.wandb_run = wandb_run
         self.log_dir = scratch_dir
-        self.expert_policy = expert_policy 
 
+        self.expert_policy = expert_policy 
         if expert_policy.observation_space != self.venv.observation_space:
             raise ValueError("Mismatched observation space between expert_policy and venv",)
         if expert_policy.action_space != self.venv.action_space:
+            raise ValueError("Mismatched action space between expert_policy and venv")
+
+        self.agent_policy = agent_policy 
+        if agent_policy.observation_space != self.venv.observation_space:
+            raise ValueError("Mismatched observation space between expert_policy and venv",)
+        if agent_policy.action_space != self.venv.action_space:
             raise ValueError("Mismatched action space between expert_policy and venv")
 
         # initial expert policy
@@ -573,12 +580,6 @@ class InteractiveHgDAggerTrainer(HgDAggerTrainer):
 
         while total_timestep_count < total_timesteps:
             print(f"\033[93m\nStarting round={round_num} with total_timestep_count={total_timestep_count}\033[0m")
-
-            """
-            collector is an instance of InteractiveTrajectoryCollector, 
-            which wraps your environment and adds DAgger-specific 
-            logic (like β-mixing and data recording).
-            """
             collector = self.create_trajectory_collector()
 
             round_episode_count = 0
@@ -589,19 +590,9 @@ class InteractiveHgDAggerTrainer(HgDAggerTrainer):
                 min_episodes=rollout_round_min_episodes,
             )
 
-            """
-            below line performs the data collection step. It runs the expert policy 
-            in the environment (with β-mixing via the collector) and records 
-            the resulting trajectories.
-
-            generate_trajectories interacts with the environment (venv=collector) by 
-            repeatedly calling step() and reset(). The collector is an InteractiveTrajectoryCollector, 
-            which wraps the environment and handles the β-mixing (deciding whether to use the expert or 
-            the learner action at each step). During this process, the collector records all 
-            (obs, expert action) pairs and saves them for later training.
-            """
-            trajectories = rollout.generate_trajectories(
-                policy=self.expert_policy,
+            trajectories = rollout.generate_trajectories_hg(
+                expert_policy=self.expert_policy,
+                agent_policy=self.agent_policy,
                 venv=collector,
                 sample_until=sample_until,
                 deterministic_policy=True,

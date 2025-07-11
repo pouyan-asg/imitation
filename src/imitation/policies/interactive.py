@@ -3,14 +3,14 @@
 import abc
 import collections
 import wandb
-from typing import Dict, Optional, Union
-
+import keyboard
+from pynput import keyboard as pynput_keyboard
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
+from typing import Dict, Optional, Union
 from shimmy import atari_env
 from stable_baselines3.common import vec_env
-
 import imitation.policies.base as base_policies
 from imitation.util import util
 from imitation.policies.base import NonTrainablePolicy
@@ -208,7 +208,7 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
                     
     """
 
-    def __init__(self, env, wand_run, *args, **kwargs):
+    def __init__(self, env, *args, **kwargs):
         """It does not learn, does not predict, and has no weights — 
         its purely a wrapper that lets a human act as the policy."""
 
@@ -220,7 +220,7 @@ class CartPoleInteractiveExpert(NonTrainablePolicy):
         print('\naction_space:', action_space)
         # Define two actions: LEFT = 0, RIGHT = 1
         self.key_to_action = {'a': 0, 'd': 1}
-        self.wand_run = wand_run  # WandB run for logging if needed
+        # self.wand_run = wand_run  # WandB run for logging if needed
         self.count = 0
         super().__init__(observation_space, action_space)
 
@@ -328,3 +328,69 @@ class RacingInteractiveExpert(NonTrainablePolicy):
         print(f"\033[96m\nHuman interaction: {self.count}\033[0m")
 
         return np.array([self.key_to_action[key]])
+    
+
+class CartPoleHG(NonTrainablePolicy):
+
+    def __init__(self, env, *args, **kwargs):
+        assert isinstance(env, vec_env.VecEnv)
+        # self.env_render_func = env.envs[0].render  # real-time rendering
+        observation_space = env.observation_space
+        action_space = env.action_space
+        print('\nobservation_space:', observation_space)
+        print('\naction_space:', action_space)
+        # Define two actions: LEFT = 0, RIGHT = 1
+        self.key_to_action = {'a': 0, 'd': 1}
+        # self.wand_run = wand_run  # WandB run for logging if needed
+        self.count = 0
+        self._pressed_key = None
+        self._listener = pynput_keyboard.Listener(on_press=self._on_press)
+        self._listener.start()
+        super().__init__(observation_space, action_space)
+
+    def _on_press(self, key):
+        try:
+            if key.char in self.key_to_action:
+                self._pressed_key = key.char
+        except AttributeError:
+            pass
+
+    def get_keyboard_action(self):
+        if self._pressed_key == 'a':
+            print("\033[92m[HG-DAgger] Human pressed 'a' (LEFT)\033[0m")
+            self._pressed_key = None
+            return 0, True
+        elif self._pressed_key == 'd':
+            print("\033[92m[HG-DAgger] Human pressed 'd' (RIGHT)\033[0m")
+            self._pressed_key = None
+            return 1, True
+        else:
+            return None, False
+    
+    # def get_keyboard_action(self):
+    #     """
+    #     Non-blocking check for 'a' or 'd' key.
+    #     Returns (action, intervening) where:
+    #         - action: 0 (left) or 1 (right) if key pressed, else None
+    #         - intervening: True if human pressed a key, else False
+    #     """
+    #     if keyboard.is_pressed('a'):
+    #         print("\033[92m[HG-DAgger] Human pressed 'a' (LEFT)\033[0m")
+    #         return 0, True
+    #     elif keyboard.is_pressed('d'):
+    #         print("\033[92m[HG-DAgger] Human pressed 'd' (RIGHT)\033[0m")
+    #         return 1, True
+    #     else:
+    #         return None, False
+
+    def _choose_action(self, obs):
+        #TODO should be act functio because _choose_action is an internal function for interactive class as a policy
+        """
+        Returns expert action if human intervenes, else None.
+        """
+        print("\n🧠 Observation:", obs)
+        action, intervening = self.get_keyboard_action()
+        if intervening:
+            return np.array([action])
+        else:
+            return 3

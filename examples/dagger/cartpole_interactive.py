@@ -77,11 +77,11 @@ train_min_timesteps = 1
 total_timesteps = 10
 n_eval_episodes = 2
 
-run = wandb.init(
-    project="CartPole_DAgger_July25",           # your project name
-    entity="electic",         # your WandB username or team name
-    name=f"R_[{timestamp}]",    # optional: name of this specific run
-)
+# run = wandb.init(
+#     project="CartPole_DAgger_July25",           # your project name
+#     entity="electic",         # your WandB username or team name
+#     name=f"R_[{timestamp}]",    # optional: name of this specific run
+# )
 
 logger = imit_logger.configure(
     folder=logs_dir,
@@ -115,13 +115,13 @@ exprt_trajs = rollout.generate_trajectories(
 )
 
 # -------Prepare expert and algorithm----------
-expert = interactive.CartPoleInteractiveExpert(env, run)
+expert = interactive.CartPoleInteractiveExpert(env)
 
 bc_trainer = bc.BC(
     observation_space=env.observation_space,
     action_space=env.action_space,
     rng=rng,
-    wandb_run=run
+    # wandb_run=run
 )
 
 dagger_trainer = dagger.InteractiveDAggerTrainer(
@@ -131,7 +131,7 @@ dagger_trainer = dagger.InteractiveDAggerTrainer(
     bc_trainer=bc_trainer,
     rng=rng,
     expert_trajs=exprt_trajs,
-    wandb_run=run,
+    # wandb_run=run,
 )
 
 # -------Training loop (code stops here until training will be finished)----------

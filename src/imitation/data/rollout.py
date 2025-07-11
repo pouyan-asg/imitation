@@ -788,3 +788,127 @@ def discounted_sum(arr: np.ndarray, gamma: float) -> Union[np.ndarray, float]:
         return arr.sum(axis=0)
     else:
         return np.polynomial.polynomial.polyval(gamma, arr)
+
+
+def generate_trajectories_hg(
+    expert_policy: AnyPolicy,
+    agent_policy: AnyPolicy,
+    venv: VecEnv,
+    sample_until: GenTrajTerminationFn,
+    rng: np.random.Generator,
+    *,
+    deterministic_policy: bool = False,
+) -> Sequence[types.TrajectoryWithRew]:
+    
+    ex_get_actions = policy_to_callable(expert_policy, venv, deterministic_policy)  # query expert or pre-defined policy
+    ag_get_actions = policy_to_callable(agent_policy, venv, deterministic_policy)
+
+    # Collect rollout tuples.
+    trajectories = []
+    # accumulator for incomplete trajectories
+    trajectories_accum = TrajectoryAccumulator()
+    obs = venv.reset()  # oorigin observations
+    assert isinstance(
+        obs,
+        (np.ndarray, dict),
+    ), "Tuple observations are not supported."
+    wrapped_obs = types.maybe_wrap_in_dictobs(obs)
+
+    # we use dictobs to iterate over the envs in a vecenv
+    for env_idx, ob in enumerate(wrapped_obs):
+        # Seed with first obs only. Inside loop, we'll only add second obs from
+        # each (s,a,r,s') tuple, under the same "obs" key again. That way we still
+        # get all observations, but they're not duplicated into "next obs" and
+        # "previous obs" (this matters for, e.g., Atari, where observations are
+        # really big).
+        trajectories_accum.add_step(dict(obs=ob), env_idx)
+
+    # Now, we sample until `sample_until(trajectories)` is true.
+    # If we just stopped then this would introduce a bias towards shorter episodes,
+    # since longer episodes are more likely to still be active, i.e. in the process
+    # of being sampled from. To avoid this, we continue sampling until all epsiodes
+    # are complete.
+    #
+    # To start with, all environments are active.
+    active = np.ones(venv.num_envs, dtype=bool)
+    state = None
+    dones = np.zeros(venv.num_envs, dtype=bool)
+
+    while np.any(active):
+        # policy gets unwrapped observations (eg as dict, not dictobs)
+        e_acts, e_state = ex_get_actions(obs, state, dones)
+        if e_acts==3:
+            ag_acts, ag_state = ag_get_actions(obs, state, dones)
+            acts = ag_acts
+            state = ag_state
+        else:
+            acts = e_acts
+            state = e_state
+
+        acts = acts.astype(int)
+        obs, rews, dones, infos = venv.step(acts)  # env step by expert action or agent policy
+        assert isinstance(
+            obs,
+            (np.ndarray, dict),
+        ), "Tuple observations are not supported."
+        wrapped_obs = types.maybe_wrap_in_dictobs(obs)
+
+        # If an environment is inactive, i.e. the episode completed for that
+        # environment after `sample_until(trajectories)` was true, then we do
+        # *not* want to add any subsequent trajectories from it. We avoid this
+        # by just making it never done.
+
+        # The operation dones &= active sets each element of dones to True only 
+        # if it was already True and the corresponding element in active is also True. 
+        # If active[i] is False, then dones[i] will be set to False regardless of its previous value.
+        # This ensures that only active environments can be marked as done.
+        dones &= active
+
+        # save expert action in any case (look at _last_user_actions in step_async())
+        new_trajs = trajectories_accum.add_steps_and_auto_finish(
+            acts,
+            wrapped_obs,
+            rews,
+            dones,
+            infos,
+        )
+        trajectories.extend(new_trajs)
+
+        if sample_until(trajectories):
+            # Termination condition has been reached. Mark as inactive any
+            # environments where a trajectory was completed this timestep.
+            active &= ~dones
+
+    # Note that we just drop partial trajectories. This is not ideal for some
+    # algos; e.g. BC can probably benefit from partial trajectories, too.
+
+    # Each trajectory is sampled i.i.d.; however, shorter episodes are added to
+    # `trajectories` sooner. Shuffle to avoid bias in order. This is important
+    # when callees end up truncating the number of trajectories or transitions.
+    # It is also cheap, since we're just shuffling pointers.
+    rng.shuffle(trajectories)  # type: ignore[arg-type]
+
+    # Sanity checks.
+    for trajectory in trajectories:
+        n_steps = len(trajectory.acts)
+        # extra 1 for the end
+        if isinstance(venv.observation_space, spaces.Dict):
+            exp_obs = {}
+            for k, v in venv.observation_space.items():
+                assert v.shape is not None
+                exp_obs[k] = (n_steps + 1,) + v.shape
+        else:
+            obs_space_shape = venv.observation_space.shape
+            assert obs_space_shape is not None
+            exp_obs = (n_steps + 1,) + obs_space_shape  # type: ignore[assignment]
+        real_obs = trajectory.obs.shape
+        assert real_obs == exp_obs, f"expected shape {exp_obs}, got {real_obs}"
+        assert venv.action_space.shape is not None
+        exp_act = (n_steps,) + venv.action_space.shape
+        real_act = trajectory.acts.shape
+        assert real_act == exp_act, f"expected shape {exp_act}, got {real_act}"
+        exp_rew = (n_steps,)
+        real_rew = trajectory.rews.shape
+        assert real_rew == exp_rew, f"expected shape {exp_rew}, got {real_rew}"
+
+    return trajectories
